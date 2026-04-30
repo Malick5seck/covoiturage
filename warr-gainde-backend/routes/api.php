@@ -44,6 +44,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // Utilise l'API Resource pour index, store, show, update, destroy
     Route::apiResource('vehicules', VehiculeController::class);
     Route::post('/vehicules/{id}/photo', [UploadController::class, 'uploadPhotoVehicule']);
+    Route::post('/user/photo', [UploadController::class, 'uploadPhotoProfil']); // Pour la photo de profil
 
     // --- TRAJETS (CHAUFFEUR) ---
     Route::post('/trajets', [TrajetController::class, 'store']);
