@@ -1,67 +1,184 @@
 <?php
 
-namespace App\Http\Controllers\Auth;
+namespace App\Models;
 
-use App\Http\Controllers\Controller;
-use App\Models\User;
-use Illuminate\Auth\Events\Registered;
-use Illuminate\Http\Request;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\Rules;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
 
-class RegisteredUserController extends Controller
+class User extends Authenticatable
 {
+    use HasApiTokens, Notifiable, SoftDeletes;
+
+    // =========================================================================
+    // CONFIGURATION ELOQUENT
+    // =========================================================================
+
+    protected $fillable = [
+        'nom',
+        'prenom',
+        'telephone',
+        'email',
+        'email_verified_at',
+        'password',
+        'role_actuel',
+        'numero_permis',
+        'date_delivrance_permis',
+        'solde_portefeuille',
+        'photo_profil',
+        'statut_verification',
+        'note_moyenne',
+        'niveau_accreditation',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected $casts = [
+        'email_verified_at'   => 'datetime',
+        'date_delivrance_permis' => 'date',
+        'solde_portefeuille'  => 'decimal:2',
+        'note_moyenne'        => 'decimal:2',
+        'password'            => 'hashed',
+    ];
+
+    // =========================================================================
+    // MÉTHODES MÉTIER — Vérification des rôles
+    // Utilisées dans AdminController::checkAdmin() et partout dans l'app
+    // =========================================================================
+
     /**
-     * Handle an incoming registration request.
-     *
-     * @throws ValidationException
+     * Vérifie si l'utilisateur est un Administrateur ou Modérateur.
      */
-    public function store(Request $request): JsonResponse
+    public function isAdmin(): bool
     {
-        $request->validate([
-            'prenom' => ['required', 'string', 'max:255'],
-            'nom' => ['required', 'string', 'max:255'],
-            'telephone' => ['required', 'string', 'max:20', 'unique:'.User::class],
-            'email' => ['nullable', 'string', 'lowercase', 'email', 'max:255', 'unique:'.User::class],
-            'password' => ['required', 'confirmed', Rules\Password::defaults()],
-            'role_actuel' => ['required', 'string', 'in:PASSAGER,CHAUFFEUR'],
-            // Required only if the user is a driver
-            'numero_permis' => ['required_if:role_actuel,CHAUFFEUR', 'nullable', 'string', 'max:50'],
-        ]);
+        return $this->role_actuel === 'ADMIN';
+    }
 
-        $user = User::create([
-            'prenom' => $request->prenom,
-            'nom' => $request->nom,
-            'telephone' => $request->telephone,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role_actuel' => $request->role_actuel,
-            'numero_permis' => $request->numero_permis,
-            
-            // Logic mapping directly to your User model's specific fields
-            'statut_verification' => ($request->role_actuel === 'CHAUFFEUR') ? 'EN_ATTENTE' : 'VERIFIE',
-            'solde_portefeuille' => 0,
-            'photo_profil' => null, // Will be updated in the next step
-            'niveau_accreditation' => 'DEBUTANT', 
-        ]);
+    /**
+     * Vérifie si l'utilisateur est un Conducteur (Chauffeur).
+     */
+    public function isConducteur(): bool
+    {
+        return $this->role_actuel === 'CHAUFFEUR';
+    }
 
-        event(new Registered($user));
+    /**
+     * Vérifie si l'utilisateur est un Passager.
+     */
+    public function isPassager(): bool
+    {
+        return $this->role_actuel === 'PASSAGER';
+    }
 
-        Auth::login($user);
+    /**
+     * Vérifie si le chauffeur est validé par l'admin et peut publier des trajets.
+     */
+    public function estValide(): bool
+    {
+        if ($this->role_actuel !== 'CHAUFFEUR') {
+            return true; // Les passagers et admins n'ont pas besoin de validation
+        }
+        return $this->statut_verification === 'VALIDE';
+    }
 
-        // Assuming Sanctum is used as per your User model
-        $token = $user->createToken('auth_token')->plainTextToken;
+    /**
+     * Vérifie si c'est un Super Admin (le seul à pouvoir créer des modérateurs).
+     */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role_actuel === 'ADMIN'
+            && $this->niveau_accreditation === 'SUPER_ADMIN';
+    }
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Registration successful',
-            'user' => $user,
-            'token' => $token,
-            // Flag to tell React to prompt for a photo upload
-            'requires_photo' => true 
-        ], 201);
+    // =========================================================================
+    // RELATIONS ELOQUENT — Architecture UML Warr Gaïndé
+    // =========================================================================
+
+    /**
+     * Un conducteur possède plusieurs véhicules.
+     * Relation : UTILISATEUR (CONDUCTEUR) → VEHICULE
+     */
+    public function vehicules()
+    {
+        return $this->hasMany(Vehicule::class, 'conducteur_id');
+    }
+
+    /**
+     * Un conducteur publie plusieurs trajets.
+     * Relation : UTILISATEUR (CONDUCTEUR) → TRAJET
+     */
+    public function trajets()
+    {
+        return $this->hasMany(Trajet::class, 'conducteur_id');
+    }
+
+    /**
+     * Un passager effectue plusieurs réservations.
+     * Relation : UTILISATEUR (PASSAGER) → RESERVATION
+     */
+    public function reservations()
+    {
+        return $this->hasMany(Reservation::class, 'passager_id');
+    }
+
+    /**
+     * Évaluations reçues par un conducteur (passagers → conducteur).
+     * Sens unique selon l'UML : seul le passager évalue le conducteur.
+     * Relation : EVALUATION.conducteur_id → UTILISATEUR
+     */
+    public function evaluationsRecues()
+    {
+        return $this->hasMany(Evaluation::class, 'conducteur_id');
+    }
+
+    /**
+     * Évaluations données par un passager.
+     * Relation : EVALUATION.passager_id → UTILISATEUR
+     */
+    public function evaluationsDonnees()
+    {
+        return $this->hasMany(Evaluation::class, 'passager_id');
+    }
+
+    /**
+     * Mouvements du portefeuille du conducteur (recharges + prélèvements).
+     * Relation : RECHARGE.conducteur_id → UTILISATEUR
+     */
+    public function recharges()
+    {
+        return $this->hasMany(Recharge::class, 'conducteur_id');
+    }
+
+    /**
+     * Notifications reçues par l'utilisateur.
+     * Relation : NOTIFICATION.user_id → UTILISATEUR
+     */
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class, 'user_id');
+    }
+
+    // =========================================================================
+    // ACCESSEURS UTILES
+    // =========================================================================
+
+    /**
+     * Nom complet formaté pour les notifications et l'affichage.
+     */
+    public function getNomCompletAttribute(): string
+    {
+        return $this->prenom . ' ' . $this->nom;
+    }
+
+    /**
+     * Nombre de notifications non lues (utile pour le badge Navbar).
+     */
+    public function getNombreNotificationsNonLuesAttribute(): int
+    {
+        return $this->notifications()->whereNull('date_lecture')->count();
     }
 }
