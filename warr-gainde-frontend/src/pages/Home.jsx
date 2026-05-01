@@ -38,7 +38,7 @@ function Home() {
           {/* BARRE DE RECHERCHE */}
           <div className="bg-white p-6 md:p-8 rounded-3xl shadow-2xl max-w-5xl mx-auto">
             <h2 className="text-2xl md:text-3xl font-extrabold text-gainde-dark mb-6 text-left">
-              Où allons-nous aujourd'hui ? 🚗
+              Où allons-nous aujourd'hui ? 
             </h2>
 
             <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">

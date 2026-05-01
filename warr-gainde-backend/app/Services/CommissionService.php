@@ -2,35 +2,62 @@
 
 namespace App\Services;
 
+use App\Models\Recharge;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
-use Exception;
 
 class CommissionService
 {
-    /**
-     * Deduct the commission amount from the driver's wallet.
-     * (We keep the method names aligned with your English structural standards where applicable).
-     */
-    // Correction dans CommissionService.php
-public function prelever($driverId, $trajetId, $amount, $tauxApplique)
-{
-    return DB::transaction(function () use ($driverId, $trajetId, $amount, $tauxApplique) {
-        $driver = User::lockForUpdate()->findOrFail($driverId);
+   
+    public function prelever(int $conducteurId, int $trajetId, float $montant): float
+    {
+        return DB::transaction(function () use ($conducteurId, $trajetId, $montant) {
 
-        // Vérification du solde (peut devenir négatif = dette)
-        $driver->decrement('solde_portefeuille', $amount);
+            // lockForUpdate() empêche deux requêtes simultanées de modifier le solde
+            $conducteur = User::lockForUpdate()->findOrFail($conducteurId);
 
-        // Traçabilité obligatoire selon UML — entité RECHARGE
-        \App\Models\Recharge::create([
-            'conducteur_id'  => $driverId,
-            'trajet_id'      => $trajetId,
-            'montant'        => $amount,
-            'type_transaction' => 'PRELEVEMENT',
-            'statut'         => 'REUSSI',
-        ]);
+            // Décrémenter le solde (peut devenir négatif = dette envers la plateforme)
+            $conducteur->decrement('solde_portefeuille', $montant);
+            $conducteur->refresh(); // Recharger pour avoir le nouveau solde exact
 
-        return $driver->solde_portefeuille;
-    });
-}
+            // Créer la trace dans la table recharges (obligatoire selon UML)
+            Recharge::create([
+                'conducteur_id'    => $conducteurId,
+                'trajet_id'        => $trajetId,
+                'montant'          => $montant,
+                'type_transaction' => 'PRELEVEMENT',
+                'statut'           => 'REUSSI',
+            ]);
+
+            return (float) $conducteur->solde_portefeuille;
+        });
+    }
+
+    
+    public function recharger(int $conducteurId, float $montant): float
+    {
+        return DB::transaction(function () use ($conducteurId, $montant) {
+
+            $conducteur = User::lockForUpdate()->findOrFail($conducteurId);
+            $conducteur->increment('solde_portefeuille', $montant);
+            $conducteur->refresh();
+
+            Recharge::create([
+                'conducteur_id'    => $conducteurId,
+                'trajet_id'        => null,
+                'montant'          => $montant,
+                'type_transaction' => 'RECHARGE',
+                'statut'           => 'REUSSI',
+            ]);
+
+            return (float) $conducteur->solde_portefeuille;
+        });
+    }
+
+
+    public function calculer(float $prixParPlace, int $placesOccupees, float $tauxCommissionApplique): float
+    {
+        $montantTotal = $prixParPlace * $placesOccupees;
+        return round($montantTotal * ($tauxCommissionApplique / 100), 2);
+    }
 }

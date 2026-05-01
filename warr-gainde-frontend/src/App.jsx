@@ -10,24 +10,9 @@ import Recherche from './pages/Recherche';
 import Publier from './pages/Publier';
 import Dashboard from './pages/Dashboard';
 import AddPhoto from './components/AddPhoto';
-
-// Composant temporaire pour la page d'attente des chauffeurs
-const AttenteValidation = () => (
-  <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-4">
-    <div className="text-6xl mb-6">⏳</div>
-    <h1 className="text-3xl font-black text-gainde-dark mb-4">Profil en cours de vérification</h1>
-    <p className="text-gray-600 max-w-md">
-      Merci de votre confiance ! Nos administrateurs vérifient votre numéro de permis. 
-      Vous recevrez un accès complet dès que votre compte sera validé.
-    </p>
-    <button 
-      onClick={() => window.location.href = '/'}
-      className="mt-8 text-gainde-yellow font-bold hover:underline"
-    >
-      Retourner à l'accueil
-    </button>
-  </div>
-);
+import Profil from './pages/Profil';
+import AttenteValidation from './pages/AttenteValidation'; // ← gardé
+import AdminDashboard from './pages/AdminDashboard';
 
 function App() {
   return (
@@ -49,13 +34,17 @@ function App() {
           <Route path="/recherche" element={<Recherche />} />
           <Route path="/publier" element={<Publier />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/profil" element={<Profil />} />
+          <Route path="/admin" element={<AdminDashboard />} />
 
           {/* Page spécifique pour la validation des chauffeurs */}
           <Route path="/attente-validation" element={<AttenteValidation />} />
 
+          {/* Ajouter photo (déplacé avant la route * pour clarté) */}
+          <Route path="/ajouter-photo" element={<AddPhoto />} />
+
           {/* Redirection automatique si la route n'existe pas */}
           <Route path="*" element={<Navigate to="/" replace />} />
-          <Route path="/ajouter-photo" element={<AddPhoto/>} />
         </Routes>
       </main>
     </BrowserRouter>
