@@ -53,8 +53,6 @@ class UserSeeder extends Seeder
             'password' => Hash::make('password123'),
             'role_actuel' => 'PASSAGER',
         ]);
-        $this->call([
-            UserSeeder::class,
-        ]);
+       
     }
 }

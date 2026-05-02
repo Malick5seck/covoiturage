@@ -34,5 +34,10 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    'paydunya' => [
+    'master_key'  => env('PAYDUNYA_MASTER_KEY'),
+    'private_key' => env('PAYDUNYA_PRIVATE_KEY'),
+    'token'       => env('PAYDUNYA_TOKEN'),
+],
 
 ];

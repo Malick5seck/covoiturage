@@ -6,58 +6,159 @@ use App\Http\Controllers\Controller;
 use App\Models\Recharge;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+
 
 class RechargeController extends Controller
 {
     /**
-     * V1 : Le chauffeur recharge son portefeuille interne (Simulation)
+     * Étape 1 : Initier un paiement PayDunya
+     * Le chauffeur demande à recharger → on crée une facture PayDunya
+     * et on retourne l'URL de paiement au frontend.
      */
-    public function rechargerCompte(Request $request)
+    public function initierRecharge(Request $request)
     {
-        // 1. On vérifie que le montant est valide (ex: minimum 500 FCFA)
         $request->validate([
             'montant' => 'required|numeric|min:500',
         ]);
 
         $conducteur = $request->user();
 
-        // 2. Transaction sécurisée pour mettre à jour les deux tables en même temps
-        return DB::transaction(function () use ($request, $conducteur) {
-            
-            // A. On augmente le solde virtuel du chauffeur
-            $conducteur->increment('solde_portefeuille', $request->montant);
+        // Référence unique pour retrouver la transaction au webhook
+        $reference = 'WG-' . $conducteur->id . '-' . time();
 
-            // B. On crée le reçu dans la base de données
-            $recharge = Recharge::create([
+        $response = Http::post('https://app.paydunya.com/api/v1/checkout-invoice/create', [
+            'invoice' => [
+                'total_amount'  => $request->montant,
+                'description'   => "Recharge portefeuille Warr Gaïndé - {$conducteur->prenom} {$conducteur->nom}",
+            ],
+            'store' => [
+                'name' => 'Warr Gaïndé',
+            ],
+            'actions' => [
+                'cancel_url'  => config('app.frontend_url') . '/portefeuille?status=annule',
+                'return_url'  => config('app.frontend_url') . '/portefeuille?status=succes',
+                'callback_url' => config('app.url') . '/api/recharges/webhook',
+            ],
+            'custom_data' => [
                 'conducteur_id' => $conducteur->id,
-                'montant' => $request->montant,
-                'type_transaction' => 'RECHARGE',
-                'statut' => 'REUSSI', // Dans la V1, la recharge est validée d'office
-                // Le trajet_id et le transaction_id restent vides pour une recharge simple
-            ]);
+                'montant'       => $request->montant,
+                'reference'     => $reference,
+            ],
+        ], [
+            'PAYDUNYA-MASTER-KEY' => config('services.paydunya.master_key'),
+            'PAYDUNYA-PRIVATE-KEY' => config('services.paydunya.private_key'),
+            'PAYDUNYA-TOKEN'       => config('services.paydunya.token'),
+        ]);
 
+        if (!$response->successful() || $response->json('response_code') !== '00') {
             return response()->json([
-                'success' => true,
-                'message' => "Votre compte a été rechargé de {$request->montant} FCFA avec succès.",
-                'nouveau_solde' => $conducteur->solde_portefeuille,
-                'data' => $recharge
-            ], 200);
-        });
+                'success' => false,
+                'message' => 'Impossible d\'initier le paiement. Veuillez réessayer.',
+            ], 500);
+        }
+
+        // On crée la recharge en attente pour la retrouver au webhook
+        Recharge::create([
+            'conducteur_id'    => $conducteur->id,
+            'montant'          => $request->montant,
+            'type_transaction' => 'RECHARGE',
+            'statut'           => 'EN_ATTENTE',
+            'transaction_id'   => $response->json('token'), // Token PayDunya
+        ]);
+
+        return response()->json([
+            'success'       => true,
+            'payment_url'   => $response->json('response_text'), // URL de paiement
+            'token'         => $response->json('token'),
+        ]);
     }
 
     /**
-     * Affiche l'historique financier du chauffeur (Recharges et Prélèvements)
+     * Étape 2 : Webhook PayDunya
+     * PayDunya appelle cette route automatiquement après paiement.
+     * Route publique — pas de middleware auth.
      */
+    public function webhook(Request $request)
+    {
+        // Vérification de la signature PayDunya
+        $hash = $request->header('X-PAYDUNYA-SIGNATURE');
+        if ($hash !== hash_hmac('sha512', $request->getContent(), config('services.paydunya.master_key'))) {
+            return response()->json(['error' => 'Signature invalide.'], 403);
+        }
+
+        $data   = $request->json()->all();
+        $token  = $data['data']['bill']['token'] ?? null;
+        $status = $data['data']['bill']['status'] ?? null;
+
+        if (!$token) {
+            return response()->json(['error' => 'Token manquant.'], 400);
+        }
+
+        $recharge = Recharge::where('transaction_id', $token)
+                            ->where('statut', 'EN_ATTENTE')
+                            ->first();
+
+        if (!$recharge) {
+            return response()->json(['error' => 'Transaction introuvable.'], 404);
+        }
+
+        if ($status === 'completed') {
+            DB::transaction(function () use ($recharge) {
+                $recharge->update(['statut' => 'REUSSI']);
+                $recharge->conducteur()->increment('solde_portefeuille', $recharge->montant);
+            });
+        } else {
+            $recharge->update(['statut' => 'ECHOUE']);
+        }
+
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Vérifier manuellement le statut d'un paiement
+     * Utile si l'utilisateur revient sur la page sans que le webhook ait eu le temps de s'exécuter.
+     */
+    public function verifierStatut(Request $request, $token)
+    {
+        $recharge = Recharge::where('transaction_id', $token)
+                            ->where('conducteur_id', $request->user()->id)
+                            ->firstOrFail();
+
+        if ($recharge->statut === 'EN_ATTENTE') {
+            // On interroge PayDunya directement
+            $response = Http::get(
+                "https://app.paydunya.com/api/v1/checkout-invoice/confirm/{$token}",
+                [],
+                [
+                    'PAYDUNYA-MASTER-KEY'  => config('services.paydunya.master_key'),
+                    'PAYDUNYA-PRIVATE-KEY' => config('services.paydunya.private_key'),
+                    'PAYDUNYA-TOKEN'       => config('services.paydunya.token'),
+                ]
+            );
+
+            if ($response->json('status') === 'completed' && $recharge->statut !== 'REUSSI') {
+                DB::transaction(function () use ($recharge) {
+                    $recharge->update(['statut' => 'REUSSI']);
+                    $recharge->conducteur()->increment('solde_portefeuille', $recharge->montant);
+                });
+                $recharge->refresh();
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'statut'  => $recharge->statut,
+            'nouveau_solde' => $recharge->conducteur->solde_portefeuille,
+        ]);
+    }
+
     public function historique(Request $request)
     {
-        // On récupère toutes les transactions du chauffeur connecté, de la plus récente à la plus ancienne
         $historique = Recharge::where('conducteur_id', $request->user()->id)
                               ->orderBy('created_at', 'desc')
                               ->get();
 
-        return response()->json([
-            'success' => true,
-            'data' => $historique
-        ], 200);
+        return response()->json(['success' => true, 'data' => $historique], 200);
     }
 }

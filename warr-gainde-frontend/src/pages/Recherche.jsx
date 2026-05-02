@@ -39,12 +39,11 @@ function Recherche() {
       }
     };
     fetchTrajets();
-  }, [depart, arrivee, date]); // 👈 L'effet se relance si ces variables changent
+  }, [depart, arrivee, date]);
 
   // 2. SOUMISSION DU NOUVEAU FORMULAIRE
   const handleNouvelleRecherche = (e) => {
     e.preventDefault();
-    // Met à jour l'URL, ce qui déclenche automatiquement le useEffect !
     setSearchParams({ depart: localDepart, arrivee: localArrivee, date: localDate });
   };
 
@@ -78,7 +77,12 @@ function Recherche() {
       return;
     }
     try {
-      const response = await api.post(`/trajets/${trajetId}/reserver`);
+      // J'ai intégré tes paramètres de réservation ici !
+      const response = await api.post(`/trajets/${trajetId}/reserver`, {
+        nombre_places: 1,
+        type_reservation: 'CLASSIQUE'
+      });
+      
       if (response.data.success) {
         alert("🎉 " + response.data.message);
         setTrajets(trajets.map(t => t.id === trajetId ? { ...t, places_disponibles: t.places_disponibles - 1 } : t));
@@ -91,7 +95,7 @@ function Recherche() {
   return (
     <div className="max-w-5xl mx-auto py-8 px-4">
       
-      {/* 🚨 NOUVEL EN-TÊTE : LE FORMULAIRE DE RECHERCHE INTÉGRÉ */}
+      {/* EN-TÊTE : LE FORMULAIRE DE RECHERCHE INTÉGRÉ */}
       <div className="bg-gainde-dark rounded-3xl shadow-lg p-6 mb-8">
         <form onSubmit={handleNouvelleRecherche} className="flex flex-col md:flex-row gap-4 items-end">
           <div className="w-full md:flex-1">

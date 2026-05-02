@@ -9,7 +9,6 @@ use App\Http\Controllers\Api\VehiculeController;
 use App\Http\Controllers\Api\TrajetController;
 use App\Http\Controllers\Api\ReservationController;
 use App\Http\Controllers\Api\EvaluationController; // On garde celui-là ou ReviewController
-use App\Http\Controllers\Api\ReviewController;
 use App\Http\Controllers\Api\RechargeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\UploadController;
@@ -21,10 +20,12 @@ use App\Http\Controllers\Api\AdminController;
 | 🟢 ROUTES PUBLIQUES
 |--------------------------------------------------------------------------
 */
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
-Route::get('/trajets', [TrajetController::class, 'index']); 
-Route::get('/chauffeurs/{conducteurId}/evaluations', [EvaluationController::class, 'indexChauffeur']); 
+Route::get('/trajets', [TrajetController::class, 'index']);
+Route::get('/chauffeurs/{conducteurId}/evaluations', [EvaluationController::class, 'indexChauffeur']);
+Route::post('/recharges/webhook', [RechargeController::class, 'webhook']);
 
 /*
 |--------------------------------------------------------------------------
@@ -34,7 +35,9 @@ Route::get('/chauffeurs/{conducteurId}/evaluations', [EvaluationController::clas
 Route::middleware(['auth:sanctum'])->group(function () {
 
     // --- PROFIL & UTILISATEUR ---
-    Route::get('/user', function (Request $request) { return $request->user(); });
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    });
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profil', [AuthController::class, 'updateProfile']);
     Route::post('/profil/photo', [UploadController::class, 'uploadPhotoProfil']);
@@ -50,7 +53,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/trajets', [TrajetController::class, 'store']);
     Route::get('/mes-trajets', [TrajetController::class, 'mesTrajets']); // Pour le Dashboard
     Route::get('/trajets/{id}/passagers', [TrajetController::class, 'listePassagers']); // Feuille de route
-    
+
     // Cycle de vie
     Route::post('/trajets/{id}/demarrer', [TrajetController::class, 'demarrerTrajet']);
     Route::post('/trajets/{id}/terminer', [TrajetController::class, 'terminerTrajet']);
@@ -61,20 +64,18 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // --- RÉSERVATIONS (PASSAGER) ---
     Route::post('/trajets/{id}/reserver', [ReservationController::class, 'store']);
     Route::get('/mes-reservations', [ReservationController::class, 'mesReservations']); // Pour le Dashboard
-    
+
     // Actions sur résas
     Route::post('/reservations/{id}/accepter', [ReservationController::class, 'accepterReservation']);
     Route::post('/reservations/{id}/refuser', [ReservationController::class, 'refuserReservation']);
     Route::post('/reservations/{id}/annuler', [ReservationController::class, 'annulerReservation']);
 
     // --- ÉVALUATIONS ---
-    // On synchronise avec le bouton du Dashboard React
-    Route::post('/trajets/{id}/reviews', [ReviewController::class, 'store']);
-
+    Route::post('/chauffeurs/{id}/evaluations', [EvaluationController::class, 'store']);
     // --- PORTEFEUILLE ---
-    Route::post('/portefeuille/recharger', [RechargeController::class, 'rechargerCompte']);
+    Route::post('/portefeuille/initier', [RechargeController::class, 'initierRecharge']);
+    Route::post('/portefeuille/verifier/{token}', [RechargeController::class, 'verifierStatut']);
     Route::get('/portefeuille/historique', [RechargeController::class, 'historique']);
-
     // --- GPS ---
     Route::post('/trajets/{trajetId}/gps', [PositionGpsController::class, 'enregistrerPosition']);
     Route::get('/trajets/{trajetId}/gps/derniere', [PositionGpsController::class, 'dernierePosition']);
@@ -87,12 +88,12 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // --- 🛡️ ZONE ADMIN ---
     Route::prefix('admin')->group(function () {
         // Stats pour les cartes du Dashboard Admin
-        Route::get('/stats', [AdminController::class, 'getDashboardStats']); 
+        Route::get('/stats', [AdminController::class, 'getDashboardStats']);
         // Liste des users pour le tableau
-        Route::get('/users', [AdminController::class, 'getUsers']); 
+        Route::get('/users', [AdminController::class, 'getUsers']);
         // Modération
         Route::post('/chauffeurs/{id}/statut', [AdminController::class, 'changerStatutChauffeur']);
-        Route::delete('/utilisateurs/{id}', [AdminController::class, 'bannirUtilisateur']);
+        Route::delete('/users/{id}', [AdminController::class, 'bannirUtilisateur']);
         // Configuration JSON
         Route::post('/commission', [AdminController::class, 'configurerTauxCommission']);
         // Gestion de l'équipe

@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import { getUser } from '../utils/auth';
 
 function Notifications() {
   const navigate = useNavigate();
-  const [user] = useState(() => {
-    const userString = localStorage.getItem('user');
-    return userString ? JSON.parse(userString) : null;
-  });
+  const [user] = useState(() => getUser());
 
   const [notifications, setNotifications] = useState([]);
   const [nonLuesCount, setNonLuesCount] = useState(0);

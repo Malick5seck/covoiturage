@@ -12,7 +12,7 @@ class AuthController extends Controller
     /**
      * INSCRIPTION (Créer un compte Passager ou Chauffeur)
      */
-   public function register(Request $request)
+    public function register(Request $request)
     {
         $validatedData = $request->validate([
             'nom' => 'required|string|max:255',
@@ -21,7 +21,7 @@ class AuthController extends Controller
             'email' => 'required|string|email|unique:users',
             'password' => 'required|string|min:8',
             'role_actuel' => 'required|in:PASSAGER,CHAUFFEUR',
-            
+
             // 🚨 L'AJOUT CRUCIAL ICI 🚨
             // Le permis est obligatoire SI le rôle est CHAUFFEUR, et il doit être unique.
             'numero_permis' => 'required_if:role_actuel,CHAUFFEUR|unique:users,numero_permis|nullable|string'
@@ -30,7 +30,7 @@ class AuthController extends Controller
         ]);
 
         $validatedData['password'] = bcrypt($validatedData['password']);
-        
+
         // Par défaut, un chauffeur nouvellement inscrit est en attente de modération
         if ($validatedData['role_actuel'] === 'CHAUFFEUR') {
             $validatedData['statut_verification'] = 'EN_ATTENTE';
@@ -49,7 +49,7 @@ class AuthController extends Controller
     /**
      * CONNEXION (Login avec Téléphone)
      */
-   public function login(Request $request)
+    public function login(Request $request)
     {
         $request->validate([
             'telephone' => 'required|string',
@@ -64,18 +64,14 @@ class AuthController extends Controller
 
         // 1er Check : Le numéro existe-t-il ?
         if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'DEBUG : Le numéro ' . $request->telephone . ' n\'existe pas dans la base de données.'
-            ], 401);
+            // Remplacer les deux messages de debug par :
+            return response()->json(['success' => false, 'message' => 'Identifiants incorrects.'], 401);
         }
 
         // 2ème Check : Le mot de passe correspond-il ?
         if (!Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'DEBUG : Utilisateur trouvé, mais le mot de passe est FAUX !'
-            ], 401);
+            // Remplacer les deux messages de debug par :
+            return response()->json(['success' => false, 'message' => 'Identifiants incorrects.'], 401);
         }
 
         // 3. Tout est bon, on donne le Token !
@@ -137,7 +133,7 @@ class AuthController extends Controller
         // On vérifie que l'ancien mot de passe tapé est le bon
         if (!Hash::check($request->ancien_mot_de_passe, $user->password)) {
             return response()->json([
-                'success' => false, 
+                'success' => false,
                 'message' => 'L\'ancien mot de passe est incorrect.'
             ], 400);
         }
@@ -148,7 +144,7 @@ class AuthController extends Controller
         ]);
 
         return response()->json([
-            'success' => true, 
+            'success' => true,
             'message' => 'Mot de passe mis à jour avec succès.'
         ], 200);
     }

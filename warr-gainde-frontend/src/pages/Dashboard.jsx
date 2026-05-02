@@ -2,14 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import MapTracking from '../components/MapTracking';
+import { getUser } from '../utils/auth';
 
 function Dashboard() {
   const navigate = useNavigate();
-  
-  const [user] = useState(() => {
-    const userString = localStorage.getItem('user');
-    return userString ? JSON.parse(userString) : null;
-  });
+  const [user] = useState(() => getUser());
 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -114,27 +111,39 @@ function Dashboard() {
   };
 
   const trackLocation = (trajetId) => {
-    if ("geolocation" in navigator) {
-      const id = setInterval(() => {
-        navigator.geolocation.getCurrentPosition(
-          async (position) => {
-            try {
-              await api.post(`/trajets/${trajetId}/gps`, {
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-              });
-            } catch (err) {}
-          },
-          (err) => console.error(err),
-          { enableHighAccuracy: true }
-        );
-      }, 30000);
-      setWatchId(id);
-    } else {
-      alert("La géolocalisation n'est pas supportée par votre navigateur.");
-    }
-  };
+  if (!('geolocation' in navigator)) {
+    alert("La géolocalisation n'est pas supportée par votre navigateur.");
+    return;
+  }
 
+  // Envoi immédiat de la première position
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    await api.post(`/trajets/${trajetId}/gps`, {
+      latitude:  pos.coords.latitude,
+      longitude: pos.coords.longitude,
+    });
+  });
+
+  // Puis toutes les 10 secondes
+  const id = setInterval(() => {
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await api.post(`/trajets/${trajetId}/gps`, {
+            latitude:  pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          });
+        } catch (err) {
+          console.error('Erreur envoi GPS', err);
+        }
+      },
+      (err) => console.error('Erreur géolocalisation', err),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  }, 10000); // 10 secondes — bon compromis batterie/précision
+
+  setWatchId(id);
+};
   // CHAUFFEUR : Démarrer ou terminer
   const handleStatusChange = async (trajetId, action) => {
     if (action === 'terminer' && !window.confirm("Êtes-vous sûr d'être arrivé à destination ? La commission sera prélevée.")) {
@@ -328,7 +337,7 @@ function Dashboard() {
                   className="bg-gray-100 text-gainde-dark px-4 py-2 rounded-xl font-bold hover:bg-gray-200 transition"
                   title="Voir les passagers"
                 >
-                  👥
+                  👥 passagers
                 </button>
 
                 {(trajet.statut === 'PUBLIE' || trajet.statut === 'A_VENIR' || trajet.statut === 'EN_ATTENTE') && (
@@ -372,7 +381,7 @@ function Dashboard() {
             ) : (
               <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
                 {selectedTrajetPassagers.length === 0 ? (
-                  <p className="text-center text-gray-500 py-4">Aucune réservation pour le moment.</p>
+                  <p className="text-center text-gray-500 py-4">Aucune réservation via l'application pour le moment.</p>
                 ) : (
                   selectedTrajetPassagers.map((res) => (
                     <div key={res.id} className={`flex items-center justify-between p-4 rounded-2xl border ${res.statut === 'EN_ATTENTE' ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>

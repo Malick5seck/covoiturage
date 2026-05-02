@@ -279,13 +279,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
+import { getUser } from '../utils/auth';
 
 function AdminDashboard() {
   const navigate = useNavigate();
-  const [user] = useState(() => {
-    const userString = localStorage.getItem('user');
-    return userString ? JSON.parse(userString) : null;
-  });
+  const [user] = useState(() => getUser());
 
   // États des données
   const [stats, setStats] = useState(null);
@@ -346,7 +344,7 @@ function AdminDashboard() {
     if (!window.confirm(`Passer ce chauffeur en ${nouveauStatut} ?`)) return;
     try {
       // URL CORRIGÉE ICI : /admin/chauffeurs/
-      const res = await api.put(`/admin/chauffeurs/${id}/statut`, { nouveau_statut: nouveauStatut });
+      const res = await api.post(`/admin/chauffeurs/${id}/statut`, { nouveau_statut: nouveauStatut });
       if(res.data.success) {
         setUsersList(usersList.map(u => u.id === id ? { ...u, statut_verification: nouveauStatut } : u));
       }
