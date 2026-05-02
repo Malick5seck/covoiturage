@@ -174,7 +174,7 @@ function Dashboard() {
     e.preventDefault();
     setSubmittingReview(true);
     try {
-      const response = await api.post(`/trajets/${reviewTrajetId}/reviews`, reviewData);
+      const response = await api.post(`/trajets/${reviewTrajetId}/evaluations`, reviewData);
       if (response.data.success) {
         alert("🎉 " + response.data.message);
         setShowReviewModal(false);

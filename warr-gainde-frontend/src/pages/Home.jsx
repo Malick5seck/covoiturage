@@ -6,7 +6,7 @@ function Home() {
 
   const user = JSON.parse(localStorage.getItem("user"));
   const isConnected = !!localStorage.getItem("token");
-  const isDriver = user && user.role === 'conducteur';
+  const isDriver = user && user.role === 'CHAUFFEUR';
 
   const [searchData, setSearchData] = useState({
     depart: "",
