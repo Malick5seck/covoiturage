@@ -182,7 +182,7 @@ function Recherche() {
                     {trajet.conducteur?.prenom} {trajet.conducteur?.nom}
                   </h4>
                   <p className="text-sm text-gray-500 mt-0.5">
-                    ⭐ {trajet.note_moyenne?.toFixed(1) || 'N/A'} • {trajet.vehicule?.marque_modele || "Véhicule standard"}
+                    ⭐ {trajet.conducteur?.note_moyenne?.toFixed(1) || 'N/A'} • {trajet.vehicule?.marque_modele || "Véhicule standard"}
                   </p>
                 </div>
               </div>

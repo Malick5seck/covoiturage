@@ -7,6 +7,7 @@ use App\Models\Setting;
 use App\Models\Trajet;
 use App\Models\Vehicule;
 use App\Models\Reservation;
+use App\Models\PositionGps;
 use App\Services\CommissionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -194,10 +195,7 @@ class TrajetController extends Controller
     }
 
     /**
-     * Terminer le trajet + PRÉLÈVEMENT RÉEL de la commission.
-     *
-     * CORRECTION CRITIQUE : Le CommissionService était commenté.
-     * Il est maintenant appelé réellement.
+     * Terminer le trajet + PRÉLÈVEMENT RÉEL de la commission + ARCHIVAGE GPS.
      */
     public function terminerTrajet(Request $request, $id)
     {
@@ -216,11 +214,14 @@ class TrajetController extends Controller
 
         return DB::transaction(function () use ($trajet) {
 
-            // 1. Mettre à jour le statut et l'heure d'arrivée réelle (CORRIGÉ : était manquant)
+            // 1. Mettre à jour le statut et l'heure d'arrivée réelle
             $trajet->update([
-                'statut'             => 'TERMINE',
+                'statut'               => 'TERMINE',
                 'heure_arrivee_reelle' => now(),
             ]);
+
+            // 🟢 ARCHIVAGE IMMÉDIAT DES POSITIONS GPS AJOUTÉ ICI
+            PositionGps::archiverPourTrajet($trajet->id);
 
             // 2. Calculer les places occupées et le montant total généré
             $placesOccupees = $trajet->nombre_places_totales - $trajet->places_disponibles;
@@ -242,7 +243,7 @@ class TrajetController extends Controller
                 $trajet->taux_commission_applique
             );
 
-            // 4. PRÉLEVER RÉELLEMENT (CORRIGÉ : n'était que commenté avant)
+            // 4. PRÉLEVER RÉELLEMENT
             $nouveauSolde = $this->commissionService->prelever(
                 $trajet->conducteur_id,
                 $trajet->id,

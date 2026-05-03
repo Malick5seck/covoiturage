@@ -9,37 +9,10 @@ use App\Models\Trajet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-/**
- * CONSOLIDATION : Ce contrôleur remplace à la fois l'ancien EvaluationController
- * et le ReviewController (qui utilisait une table `reviews` avec des colonnes
- * en anglais : passenger_id, driver_id, rating, comment).
- *
- * Selon l'UML de Warr Gaïndé :
- *  - Il n'existe qu'une seule entité EVALUATION
- *  - Le sens est UNIDIRECTIONNEL : le passager évalue le conducteur uniquement
- *  - Les colonnes sont en français : passager_id, conducteur_id, note, commentaire
- *  - La table utilisée est `evaluations` (déjà migrée)
- *
- * Action à faire manuellement :
- *  1. Supprimer le fichier app/Http/Controllers/Api/ReviewController.php
- *  2. Supprimer la migration create_reviews_table
- *  3. Dans routes/api.php : remplacer la route reviews par evaluations (voir api.php corrigé)
- */
+
 class EvaluationController extends Controller
 {
-    // =========================================================================
-    // CRÉATION D'UNE ÉVALUATION
-    // =========================================================================
-
-    /**
-     * Un passager évalue un conducteur après un trajet terminé.
-     *
-     * Règles métier (toutes vérifiées) :
-     *  1. Le trajet doit être au statut TERMINE
-     *  2. Le passager doit avoir une réservation ACCEPTEE sur ce trajet
-     *  3. Le passager ne peut évaluer qu'une seule fois par trajet
-     *  4. La note moyenne du conducteur est recalculée automatiquement
-     */
+   
     public function store(Request $request, $trajetId)
     {
         $request->validate([
@@ -115,14 +88,6 @@ class EvaluationController extends Controller
         });
     }
 
-    // =========================================================================
-    // LECTURE DES ÉVALUATIONS
-    // =========================================================================
-
-    /**
-     * Liste des évaluations reçues par un conducteur (pour son profil public).
-     * Route publique : tout le monde peut voir les avis d'un chauffeur.
-     */
     public function indexChauffeur($conducteurId)
     {
         $evaluations = Evaluation::with('passager:id,nom,prenom,photo_profil')

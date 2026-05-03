@@ -60,6 +60,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/trajets/{id}/annuler', [TrajetController::class, 'annulerTrajet']);
     Route::post('/trajets/{id}/passager-manuel', [TrajetController::class, 'ajouterPassagerManuel']);
     Route::post('/trajets/{id}/place-liberee', [TrajetController::class, 'libererPlaceManuelle']);
+    // Historique du parcours (conducteur/admin uniquement)
+    Route::get('/trajets/{trajetId}/gps/historique', [PositionGpsController::class, 'historiquePositions']);
 
     // --- RÉSERVATIONS (PASSAGER) ---
     Route::post('/trajets/{id}/reserver', [ReservationController::class, 'store']);

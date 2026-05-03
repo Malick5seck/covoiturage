@@ -22,8 +22,9 @@ function AdminDashboard() {
 
   // 1. CHARGEMENT DES DONNÉES
   useEffect(() => {
-    // Sécurité : Accessible uniquement aux ADMIN et MODERATEUR
-    if (!user || (user.role_actuel !== 'ADMIN' && user.role_actuel !== 'MODERATEUR')) {
+    // Sécurité : Accessible à tout le staff (role_actuel === 'ADMIN')
+    // La distinction Modérateur/Super Admin se fera sur le niveau_accreditation pour l'affichage
+    if (!user || user.role_actuel !== 'ADMIN') {
       navigate('/');
       return;
     }
@@ -65,7 +66,6 @@ function AdminDashboard() {
   const handleChauffeurStatus = async (id, nouveauStatut) => {
     if (!window.confirm(`Passer ce chauffeur en ${nouveauStatut} ?`)) return;
     try {
-      // URL CORRIGÉE ICI : /admin/chauffeurs/
       const res = await api.post(`/admin/chauffeurs/${id}/statut`, { nouveau_statut: nouveauStatut });
       if(res.data.success) {
         setUsersList(usersList.map(u => u.id === id ? { ...u, statut_verification: nouveauStatut } : u));
@@ -116,7 +116,7 @@ function AdminDashboard() {
         <div>
           <h1 className="text-3xl font-black">Administration Warr Gaïndé</h1>
           <p className="text-gray-300 mt-2">
-            Espace {user?.role_actuel === 'ADMIN' ? 'Super Administrateur' : 'Modérateur'}.
+            Espace {user?.niveau_accreditation === 'MODERATEUR' ? 'Modérateur' : 'Super Administrateur'}.
           </p>
         </div>
       </div>
@@ -140,8 +140,8 @@ function AdminDashboard() {
             <h3 className="text-4xl font-black text-blue-600">{stats?.trajets_en_cours}</h3>
           </div>
           
-          {/* CHIFFRE D'AFFAIRES (Visible uniquement par l'ADMIN) */}
-          {user?.role_actuel === 'ADMIN' ? (
+          {/* CHIFFRE D'AFFAIRES (Visible uniquement si l'Admin n'est PAS un Modérateur) */}
+          {user?.niveau_accreditation !== 'MODERATEUR' ? (
             <div className="bg-gainde-yellow p-6 rounded-3xl shadow-sm border border-yellow-400">
               <p className="text-gainde-dark font-bold mb-1">Revenus Plateforme</p>
               <h3 className="text-4xl font-black text-gainde-dark">{stats?.chiffre_affaires_plateforme} <span className="text-xl">FCFA</span></h3>
@@ -154,7 +154,7 @@ function AdminDashboard() {
         </div>
 
         {/* ACTIONS SUPER ADMIN (Masquées pour les modérateurs) */}
-        {user?.role_actuel === 'ADMIN' && (
+        {user?.niveau_accreditation !== 'MODERATEUR' && (
           <div className="space-y-6">
             
             {/* RÉGLAGE COMMISSION */}
@@ -228,11 +228,11 @@ function AdminDashboard() {
                   </td>
                   <td className="p-4">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      u.role_actuel === 'ADMIN' ? 'bg-purple-100 text-purple-700' :
-                      u.role_actuel === 'MODERATEUR' ? 'bg-blue-100 text-blue-700' :
+                      u.role_actuel === 'ADMIN' && u.niveau_accreditation !== 'MODERATEUR' ? 'bg-purple-100 text-purple-700' :
+                      u.role_actuel === 'ADMIN' && u.niveau_accreditation === 'MODERATEUR' ? 'bg-blue-100 text-blue-700' :
                       u.role_actuel === 'CHAUFFEUR' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-700'
                     }`}>
-                      {u.role_actuel}
+                      {u.role_actuel === 'ADMIN' && u.niveau_accreditation === 'MODERATEUR' ? 'MODÉRATEUR' : u.role_actuel}
                     </span>
                   </td>
                   <td className="p-4">
@@ -256,7 +256,7 @@ function AdminDashboard() {
                         </button>
                       </>
                     )}
-                    {/* Bannir (Soft Delete) - On empêche de bannir un ADMIN */}
+                    {/* Bannir (Soft Delete) - On empêche de bannir un ADMIN (ou un modérateur) */}
                     {u.role_actuel !== 'ADMIN' && (
                       <button onClick={() => handleBanUser(u.id)} className="bg-red-50 text-red-600 px-3 py-1 rounded text-xs font-bold hover:bg-red-100">
                         Bannir

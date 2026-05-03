@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
 
-
 function Publier() {
   const navigate = useNavigate();
 
@@ -46,12 +45,22 @@ function Publier() {
     heure_depart: "",
     heure_arrivee_estimee: "",
     prix_place: "",
-    vehicule_id: "", // Remplacé "places_disponibles" par l'ID du véhicule
+    vehicule_id: "",
   });
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+
+  // --- CORRECTION DU CALCUL DE LA COMMISSION ---
+  // On récupère le véhicule sélectionné pour connaître sa capacité maximale
+  const vehiculeSelectionne = mesVehicules.find(
+    (v) => v.id.toString() === formData.vehicule_id.toString()
+  );
+  const placesMax = vehiculeSelectionne ? vehiculeSelectionne.nombre_places_max : 0;
+  
+  // Commission = Prix par place * Nombre de places max * 5%
+  const commissionEstimee = parseFloat(formData.prix_place || 0) * placesMax * 0.05;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -59,13 +68,12 @@ function Publier() {
     setError("");
     setSuccess(false);
 
-    // Vérification du solde — commission estimée = prix * taux actuel (5% par défaut)
-    const commissionEstimee = parseFloat(formData.prix_place) * 0.05;
+    // Vérification bloquante basée sur la commission totale maximale
     if (soldeActuel < commissionEstimee) {
       setError(
-        `Solde insuffisant. Commission estimée : ${commissionEstimee.toFixed(0)} FCFA. ` +
+        `Solde insuffisant. La commission estimée pour un véhicule complet (${placesMax} places) est de ${commissionEstimee.toFixed(0)} FCFA. ` +
           `Votre solde actuel : ${soldeActuel.toLocaleString("fr-FR")} FCFA. ` +
-          `Veuillez recharger votre portefeuille avant de publier.`,
+          `Veuillez recharger votre portefeuille avant de publier.`
       );
       setLoading(false);
       return;
@@ -77,14 +85,14 @@ function Publier() {
         setSuccess(true);
         setTimeout(() => {
           navigate(
-            `/recherche?depart=${formData.ville_depart}&arrivee=${formData.ville_arrivee}`,
+            `/recherche?depart=${formData.ville_depart}&arrivee=${formData.ville_arrivee}`
           );
         }, 2000);
       }
     } catch (err) {
       setError(
         err.response?.data?.message ||
-          "Une erreur est survenue lors de la publication.",
+          "Une erreur est survenue lors de la publication."
       );
     } finally {
       setLoading(false);
@@ -230,7 +238,6 @@ function Publier() {
               💳 Détails du voyage
             </h3>
             <div className="flex flex-col md:flex-row gap-4">
-              {/* LE NOUVEAU MENU DÉROULANT DU VÉHICULE */}
               <div className="flex-1">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Véhicule utilisé
@@ -272,10 +279,11 @@ function Publier() {
               </div>
             </div>
           </div>
+
           {/* SOLDE DISPONIBLE */}
           <div
             className={`flex items-center justify-between p-4 rounded-xl border ${
-              soldeActuel >= parseFloat(formData.prix_place || 0) * 0.05
+              soldeActuel >= commissionEstimee
                 ? "bg-green-50 border-green-200"
                 : "bg-red-50 border-red-200"
             }`}
@@ -285,21 +293,21 @@ function Publier() {
                 Solde portefeuille
               </p>
               <p className="text-xs text-gray-500">
-                Commission estimée : ~
-                {(parseFloat(formData.prix_place || 0) * 0.05).toFixed(0)} FCFA
+                Commission max. (véhicule complet) : ~
+                {commissionEstimee.toFixed(0)} FCFA
               </p>
             </div>
             <div className="text-right">
               <p
                 className={`font-black text-lg ${
-                  soldeActuel >= parseFloat(formData.prix_place || 0) * 0.05
+                  soldeActuel >= commissionEstimee
                     ? "text-green-600"
                     : "text-red-500"
                 }`}
               >
                 {soldeActuel.toLocaleString("fr-FR")} FCFA
               </p>
-              {soldeActuel < parseFloat(formData.prix_place || 0) * 0.05 && (
+              {soldeActuel < commissionEstimee && (
                 <Link
                   to="/portefeuille"
                   className="text-xs font-bold text-red-500 underline"

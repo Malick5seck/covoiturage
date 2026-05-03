@@ -3,7 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import api from '../api/axios';
-import echo from '/src/echo'; // Assurez-vous que votre instance Echo est correctement exportée depuis ce chemin
+import echo from '../echo'; // Assurez-vous que votre instance Echo est correctement exportée depuis ce chemin
 
 // Correction icône Leaflet
 delete L.Icon.Default.prototype._getIconUrl;

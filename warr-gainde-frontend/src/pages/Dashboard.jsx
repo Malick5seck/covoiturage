@@ -18,7 +18,7 @@ function Dashboard() {
 
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewTrajetId, setReviewTrajetId] = useState(null);
-  const [reviewData, setReviewData] = useState({ rating: 5, comment: '' });
+  const [reviewData, setReviewData] = useState({ note: 5, commentaire: '' });
   const [submittingReview, setSubmittingReview] = useState(false);
 
   const [watchId, setWatchId] = useState(null);
@@ -178,7 +178,7 @@ function Dashboard() {
       if (response.data.success) {
         alert("🎉 " + response.data.message);
         setShowReviewModal(false);
-        setReviewData({ rating: 5, comment: '' });
+        setReviewData({ note: 5, commentaire: '' });
       }
     } catch (err) {
       alert(err.response?.data?.message || "Erreur lors de l'envoi de l'avis.");
@@ -460,8 +460,8 @@ function Dashboard() {
                     <button
                       type="button"
                       key={star}
-                      onClick={() => setReviewData({...reviewData, rating: star})}
-                      className={`text-4xl transition-transform ${reviewData.rating >= star ? 'text-gainde-yellow scale-110' : 'text-gray-200 hover:text-gray-300'}`}
+                      onClick={() => setReviewData({...reviewData, note: star})}
+                      className={`text-4xl transition-transform ${reviewData.note >= star ? 'text-gainde-yellow scale-110' : 'text-gray-200 hover:text-gray-300'}`}
                     >
                       ★
                     </button>
@@ -475,8 +475,8 @@ function Dashboard() {
                   rows="3" 
                   placeholder="Comment s'est passé le trajet avec ce chauffeur ?"
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none resize-none"
-                  value={reviewData.comment}
-                  onChange={(e) => setReviewData({...reviewData, comment: e.target.value})}
+                  value={reviewData.commentaire}
+                  onChange={(e) => setReviewData({...reviewData, commentaire: e.target.value})}
                 ></textarea>
               </div>
 
