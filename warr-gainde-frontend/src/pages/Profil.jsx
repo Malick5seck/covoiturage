@@ -26,7 +26,7 @@ function Profil() {
   });
 
   const [photo, setPhoto] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(user?.photo_profil ? `http://localhost:8000/storage/${user.photo_profil}` : null);
+  const [photoPreview, setPhotoPreview] = useState(user?.photo_profil ? `$url = asset('storage/' . $path);` : null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 

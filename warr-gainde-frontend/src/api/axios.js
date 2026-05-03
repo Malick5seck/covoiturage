@@ -1,23 +1,34 @@
 import axios from 'axios';
 
-// 1. On crée une instance configurée pour pointer vers ton Laravel
+// 1. Instance Axios pointant vers le back-end Laravel
 const api = axios.create({
-  baseURL: 'http://localhost:8000/api', // L'URL de ton back-end
+  baseURL: 'http://localhost:8000/api',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
   }
 });
 
-// 2. Intercepteur : Le "Garde du corps"
-// Avant CHAQUE requête envoyée au back-end, il regarde si on a un Token Sanctum.
-// Si oui, il l'attache automatiquement comme un badge VIP !
+// 2. Intercepteur de requête : attache automatiquement le token Sanctum
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token'); // On récupère le token sauvegardé
+  const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
+
+// 3. Intercepteur de réponse : gestion des erreurs 401 (token expiré ou invalide)
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
 
 export default api;

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Api\NotificationController;
 use App\Models\Setting;
 use App\Models\Trajet;
 use App\Models\Vehicule;
@@ -25,10 +26,6 @@ class TrajetController extends Controller
     // ROUTES PUBLIQUES
     // =========================================================================
 
-    /**
-     * Recherche et liste des trajets disponibles.
-     * Accessible sans authentification (passagers non inscrits peuvent consulter).
-     */
     public function index(Request $request)
     {
         $query = Trajet::with(['conducteur:id,nom,prenom,photo_profil,note_moyenne', 'vehicule'])
@@ -55,9 +52,6 @@ class TrajetController extends Controller
         ], 200);
     }
 
-    /**
-     * Détails d'un trajet spécifique.
-     */
     public function show($id)
     {
         $trajet = Trajet::with([
@@ -76,15 +70,10 @@ class TrajetController extends Controller
     // ACTIONS CONDUCTEUR
     // =========================================================================
 
-    /**
-     * Publier un nouveau trajet.
-     * Seul un CHAUFFEUR validé peut publier.
-     */
     public function store(Request $request)
     {
         $user = $request->user();
 
-        // Sécurité : seul un chauffeur validé peut publier
         if (!$user->isConducteur()) {
             return response()->json([
                 'success' => false,
@@ -108,7 +97,6 @@ class TrajetController extends Controller
             'vehicule_id'   => 'required|exists:vehicules,id',
         ]);
 
-        // Sécurité : le véhicule doit appartenir à ce chauffeur
         $vehicule = Vehicule::where('id', $request->vehicule_id)
                             ->where('conducteur_id', $user->id)
                             ->first();
@@ -120,22 +108,41 @@ class TrajetController extends Controller
             ], 403);
         }
 
-        // Récupérer le taux de commission actuel depuis la table settings
         $tauxActuel = (float) (Setting::where('key', 'taux_commission')->value('value') ?? 5);
+
+        // =====================================================================
+        // VÉRIFICATION DU SOLDE CÔTÉ BACKEND
+        // Commission maximale théorique = prix * places_max * taux
+        // On bloque si le solde ne couvre pas ce pire cas.
+        // =====================================================================
+        $commissionMax = round(
+            $request->prix_place * $vehicule->nombre_places_max * ($tauxActuel / 100),
+            2
+        );
+
+        if ((float) $user->solde_portefeuille < $commissionMax) {
+            return response()->json([
+                'success' => false,
+                'message' => "Solde insuffisant. La commission maximale pour ce trajet (véhicule complet) est de {$commissionMax} FCFA. "
+                           . "Votre solde actuel : {$user->solde_portefeuille} FCFA. "
+                           . "Rechargez votre portefeuille avant de publier.",
+                'solde_actuel'       => (float) $user->solde_portefeuille,
+                'commission_max'     => $commissionMax,
+            ], 422);
+        }
 
         $dateHeureDepart = $request->date_depart . ' ' . $request->heure_depart;
 
         $trajet = Trajet::create([
-            'conducteur_id'           => $user->id,
-            'vehicule_id'             => $vehicule->id,
-            'ville_depart'            => $request->ville_depart,
-            'ville_arrivee'           => $request->ville_arrivee,
-            'date_heure_depart'       => $dateHeureDepart,
-            'prix_par_place'          => $request->prix_place,
-            'nombre_places_totales'   => $vehicule->nombre_places_max,
-            'places_disponibles'      => $vehicule->nombre_places_max,
-            'statut'                  => 'EN_ATTENTE',
-            // Taux figé au moment de la création pour audit (même si l'admin change le taux après)
+            'conducteur_id'            => $user->id,
+            'vehicule_id'              => $vehicule->id,
+            'ville_depart'             => $request->ville_depart,
+            'ville_arrivee'            => $request->ville_arrivee,
+            'date_heure_depart'        => $dateHeureDepart,
+            'prix_par_place'           => $request->prix_place,
+            'nombre_places_totales'    => $vehicule->nombre_places_max,
+            'places_disponibles'       => $vehicule->nombre_places_max,
+            'statut'                   => 'EN_ATTENTE',
             'taux_commission_applique' => $tauxActuel,
         ]);
 
@@ -146,9 +153,6 @@ class TrajetController extends Controller
         ], 201);
     }
 
-    /**
-     * Historique des trajets publiés par le conducteur connecté.
-     */
     public function mesTrajets(Request $request)
     {
         $trajets = Trajet::with(['vehicule', 'reservations'])
@@ -162,9 +166,10 @@ class TrajetController extends Controller
         ], 200);
     }
 
-    /**
-     * Démarrer le trajet (le jour J).
-     */
+    // =========================================================================
+    // DÉMARRER — Notifie tous les passagers ACCEPTÉS
+    // =========================================================================
+
     public function demarrerTrajet(Request $request, $id)
     {
         $trajet = Trajet::findOrFail($id);
@@ -181,22 +186,38 @@ class TrajetController extends Controller
         }
 
         $trajet->update([
-            'statut'            => 'EN_COURS',
+            'statut'              => 'EN_COURS',
             'heure_depart_reelle' => now(),
         ]);
 
-        // TODO Étape 3 : notifier les passagers acceptés que le trajet a démarré
+        // =====================================================================
+        // NOTIFICATION : Passagers acceptés — le trajet vient de démarrer
+        // =====================================================================
+        $passagersAcceptes = Reservation::where('trajet_id', $trajet->id)
+                                        ->where('statut', 'ACCEPTEE')
+                                        ->pluck('passager_id');
+
+        foreach ($passagersAcceptes as $passagerId) {
+            NotificationController::creer(
+                $passagerId,
+                'DEPART_IMMINENT',
+                "🚗 Votre trajet {$trajet->ville_depart} → {$trajet->ville_arrivee} vient de démarrer. "
+                . "Bon voyage !"
+            );
+        }
 
         return response()->json([
-            'success' => true,
-            'message' => 'Bonne route ! Le trajet a démarré.',
-            'data'    => $trajet,
+            'success'             => true,
+            'message'             => 'Bonne route ! Le trajet a démarré.',
+            'passagers_notifies'  => $passagersAcceptes->count(),
+            'data'                => $trajet,
         ], 200);
     }
 
-    /**
-     * Terminer le trajet + PRÉLÈVEMENT RÉEL de la commission + ARCHIVAGE GPS.
-     */
+    // =========================================================================
+    // TERMINER — Commission + GPS + Notifie tous les passagers ACCEPTÉS
+    // =========================================================================
+
     public function terminerTrajet(Request $request, $id)
     {
         $trajet = Trajet::findOrFail($id);
@@ -220,37 +241,53 @@ class TrajetController extends Controller
                 'heure_arrivee_reelle' => now(),
             ]);
 
-            // 🟢 ARCHIVAGE IMMÉDIAT DES POSITIONS GPS AJOUTÉ ICI
+            // 2. Archiver les positions GPS du trajet
             PositionGps::archiverPourTrajet($trajet->id);
 
-            // 2. Calculer les places occupées et le montant total généré
+            // 3. Récupérer les passagers acceptés AVANT le calcul
+            //    (utile pour la notification même s'il n'y a pas de commission)
+            $passagersAcceptes = Reservation::where('trajet_id', $trajet->id)
+                                            ->where('statut', 'ACCEPTEE')
+                                            ->pluck('passager_id');
+
+            // 4. Calculer les places occupées
             $placesOccupees = $trajet->nombre_places_totales - $trajet->places_disponibles;
 
             if ($placesOccupees <= 0) {
-                // Aucun passager = aucune commission à prélever
+                // Aucun passager = pas de commission, mais on notifie quand même si besoin
                 return response()->json([
-                    'success' => true,
-                    'message' => 'Trajet terminé. Aucune commission prélevée (aucun passager).',
-                    'statut'  => 'TERMINE',
+                    'success'             => true,
+                    'message'             => 'Trajet terminé. Aucune commission prélevée (aucun passager).',
+                    'statut'              => 'TERMINE',
                     'commission_prelevee' => 0,
                 ], 200);
             }
 
-            // 3. Calculer la commission avec le taux FIGÉ à la création du trajet
+            // 5. Calculer la commission avec le taux FIGÉ à la création
             $commission = $this->commissionService->calculer(
                 $trajet->prix_par_place,
                 $placesOccupees,
                 $trajet->taux_commission_applique
             );
 
-            // 4. PRÉLEVER RÉELLEMENT
+            // 6. Prélever réellement depuis le portefeuille du conducteur
             $nouveauSolde = $this->commissionService->prelever(
                 $trajet->conducteur_id,
                 $trajet->id,
                 $commission
             );
 
-            // TODO Étape 3 : notifier les passagers que le trajet est terminé
+            // =====================================================================
+            // NOTIFICATION : Passagers acceptés — le trajet est arrivé à destination
+            // =====================================================================
+            foreach ($passagersAcceptes as $passagerId) {
+                NotificationController::creer(
+                    $passagerId,
+                    'ARRIVEE',
+                    "🏁 Vous êtes arrivé à destination ! Votre trajet {$trajet->ville_depart} → {$trajet->ville_arrivee} est terminé. "
+                    . "N'oubliez pas d'évaluer votre conducteur."
+                );
+            }
 
             return response()->json([
                 'success'             => true,
@@ -259,13 +296,15 @@ class TrajetController extends Controller
                 'commission_prelevee' => $commission,
                 'nouveau_solde'       => $nouveauSolde,
                 'places_occupees'     => $placesOccupees,
+                'passagers_notifies'  => $passagersAcceptes->count(),
             ], 200);
         });
     }
 
-    /**
-     * Annuler le trajet (urgence/panne) avec annulation en cascade des réservations.
-     */
+    // =========================================================================
+    // ANNULER — Cascade réservations + Notifie tous les passagers concernés
+    // =========================================================================
+
     public function annulerTrajet(Request $request, $id)
     {
         return DB::transaction(function () use ($request, $id) {
@@ -283,26 +322,48 @@ class TrajetController extends Controller
                 ], 400);
             }
 
+            // 1. Récupérer les passagers à notifier AVANT l'annulation en cascade
+            //    On notifie ceux EN_ATTENTE et ACCEPTEE (les deux sont impactés)
+            $passagersANotifier = Reservation::where('trajet_id', $trajet->id)
+                                             ->whereIn('statut', ['EN_ATTENTE', 'ACCEPTEE'])
+                                             ->pluck('passager_id');
+
+            // 2. Passer le trajet en ANNULE
             $trajet->update(['statut' => 'ANNULE']);
 
-            // Annulation en cascade de toutes les réservations actives
+            // 3. Annulation en cascade de toutes les réservations actives
             $trajet->reservations()
                    ->whereIn('statut', ['EN_ATTENTE', 'ACCEPTEE'])
-                   ->update(['statut' => 'ANNULEE', 'motif_annulation' => 'Trajet annulé par le conducteur']);
+                   ->update([
+                       'statut'            => 'ANNULEE',
+                       'motif_annulation'  => 'Trajet annulé par le conducteur',
+                   ]);
 
-            // TODO Étape 3 : notifier tous les passagers concernés
+            // =====================================================================
+            // NOTIFICATION : Tous les passagers concernés (EN_ATTENTE + ACCEPTEE)
+            // =====================================================================
+            foreach ($passagersANotifier as $passagerId) {
+                NotificationController::creer(
+                    $passagerId,
+                    'ANNULATION',
+                    "⚠️ Le trajet {$trajet->ville_depart} → {$trajet->ville_arrivee} prévu le "
+                    . \Carbon\Carbon::parse($trajet->date_heure_depart)->format('d/m/Y à H:i')
+                    . " a été annulé par le conducteur. Votre réservation a été automatiquement annulée."
+                );
+            }
 
             return response()->json([
-                'success' => true,
-                'message' => 'Le trajet a été annulé et toutes les réservations ont été mises à jour.',
+                'success'            => true,
+                'message'            => 'Le trajet a été annulé et toutes les réservations ont été mises à jour.',
+                'passagers_notifies' => $passagersANotifier->count(),
             ], 200);
         });
     }
 
-    /**
-     * Feuille de route : liste des passagers acceptés pour un trajet.
-     * Accessible uniquement au conducteur du trajet ou à un admin.
-     */
+    // =========================================================================
+    // UTILITAIRES CONDUCTEUR
+    // =========================================================================
+
     public function listePassagers(Request $request, $id)
     {
         $trajet = Trajet::findOrFail($id);
@@ -323,14 +384,12 @@ class TrajetController extends Controller
         ], 200);
     }
 
-    /**
-     * Ajouter un passager manuellement (pris en route sans l'application).
-     */
     public function ajouterPassagerManuel(Request $request, $id)
     {
         $trajet = Trajet::findOrFail($id);
+        $user   = $request->user();
 
-        if ($trajet->conducteur_id !== $request->user()->id) {
+        if ($trajet->conducteur_id !== $user->id || $user->role_actuel !== 'CHAUFFEUR') {
             return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
         }
 
@@ -352,14 +411,12 @@ class TrajetController extends Controller
         ], 200);
     }
 
-    /**
-     * Libérer une place (passager descendu en route).
-     */
     public function libererPlaceManuelle(Request $request, $id)
     {
         $trajet = Trajet::findOrFail($id);
+        $user   = $request->user();
 
-        if ($trajet->conducteur_id !== $request->user()->id) {
+        if ($trajet->conducteur_id !== $user->id || $user->role_actuel !== 'CHAUFFEUR') {
             return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
         }
 

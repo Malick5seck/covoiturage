@@ -23,9 +23,12 @@ function Dashboard() {
 
   const [watchId, setWatchId] = useState(null);
 
+  // Cleanup : arrêt du tracking GPS si le composant est démonté ou watchId change
   useEffect(() => {
     return () => {
-      if (watchId) clearInterval(watchId);
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
     };
   }, [watchId]);
 
@@ -110,23 +113,14 @@ function Dashboard() {
     }
   };
 
+  // Nouveau tracking avec watchPosition (plus précis et économe)
   const trackLocation = (trajetId) => {
-  if (!('geolocation' in navigator)) {
-    alert("La géolocalisation n'est pas supportée par votre navigateur.");
-    return;
-  }
+    if (!('geolocation' in navigator)) {
+      alert("La géolocalisation n'est pas supportée par votre navigateur.");
+      return;
+    }
 
-  // Envoi immédiat de la première position
-  navigator.geolocation.getCurrentPosition(async (pos) => {
-    await api.post(`/trajets/${trajetId}/gps`, {
-      latitude:  pos.coords.latitude,
-      longitude: pos.coords.longitude,
-    });
-  });
-
-  // Puis toutes les 10 secondes
-  const id = setInterval(() => {
-    navigator.geolocation.getCurrentPosition(
+    const id = navigator.geolocation.watchPosition(
       async (pos) => {
         try {
           await api.post(`/trajets/${trajetId}/gps`, {
@@ -138,12 +132,12 @@ function Dashboard() {
         }
       },
       (err) => console.error('Erreur géolocalisation', err),
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true }
     );
-  }, 10000); // 10 secondes — bon compromis batterie/précision
 
-  setWatchId(id);
-};
+    setWatchId(id);
+  };
+
   // CHAUFFEUR : Démarrer ou terminer
   const handleStatusChange = async (trajetId, action) => {
     if (action === 'terminer' && !window.confirm("Êtes-vous sûr d'être arrivé à destination ? La commission sera prélevée.")) {
@@ -155,8 +149,8 @@ function Dashboard() {
         alert("✅ " + response.data.message);
         if (action === 'demarrer') {
           trackLocation(trajetId);
-        } else if (action === 'terminer' && watchId) {
-          clearInterval(watchId);
+        } else if (action === 'terminer' && watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
           setWatchId(null);
         }
         setData(data.map(t => {
@@ -303,7 +297,7 @@ function Dashboard() {
                 <p className="text-gray-500 text-sm mt-1">
                   📅 {new Date(trajet.date_heure_depart).toLocaleDateString('fr-FR')} à {trajet.date_heure_depart?.substring(11,16)}
                 </p>
-                {watchId && trajet.statut === 'EN_COURS' && (
+                {watchId !== null && trajet.statut === 'EN_COURS' && (
                   <p className="text-xs text-blue-600 font-bold mt-2 animate-pulse">📡 GPS Actif - Position partagée</p>
                 )}
               </div>

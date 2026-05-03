@@ -8,45 +8,53 @@ use App\Models\Trajet;
 use App\Models\Recharge;
 use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 
 class AdminController extends Controller
 {
     // =========================================================================
-    // SÉCURITÉ GLOBALE
+    // HELPERS DE SÉCURITÉ
     // =========================================================================
 
     /**
-     * Vérifie que l'utilisateur connecté est bien un ADMIN ou MODERATEUR.
-     * Appelé en tête de chaque méthode sensible.
+     * Vérifie que l'utilisateur est ADMIN ou MODERATEUR.
+     * Retourne null si OK, sinon une réponse JSON 403.
      */
-    private function checkAdmin(Request $request): void
+    private function checkAdmin(Request $request): ?JsonResponse
     {
         if (!$request->user() || !$request->user()->isAdmin()) {
-            abort(403, 'Accès refusé. Réservé aux administrateurs.');
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès refusé. Réservé aux administrateurs.',
+            ], 403);
         }
+        return null;
     }
 
     /**
-     * Vérifie que c'est spécifiquement un SUPER_ADMIN.
-     * Utilisé pour les actions sensibles : commission, création modérateur.
+     * Vérifie que l'utilisateur est SUPER_ADMIN.
+     * Retourne null si OK, sinon une réponse JSON 403.
      */
-    private function checkSuperAdmin(Request $request): void
+    private function checkSuperAdmin(Request $request): ?JsonResponse
     {
         if (!$request->user() || !$request->user()->isSuperAdmin()) {
-            abort(403, 'Accès refusé. Réservé au Super Administrateur.');
+            return response()->json([
+                'success' => false,
+                'message' => 'Accès refusé. Réservé au Super Administrateur.',
+            ], 403);
         }
+        return null;
     }
 
     // =========================================================================
     // 1. TABLEAU DE BORD
     // =========================================================================
 
-    /**
-     * Statistiques globales pour les cartes du Dashboard Admin React.
-     */
-    public function getDashboardStats(Request $request)
+    public function getDashboardStats(Request $request): JsonResponse
     {
-        $this->checkAdmin($request);
+        if ($response = $this->checkAdmin($request)) {
+            return $response;
+        }
 
         $stats = [
             'total_utilisateurs'        => User::count(),
@@ -63,7 +71,6 @@ class AdminController extends Controller
             'chiffre_affaires_plateforme' => Recharge::where('type_transaction', 'PRELEVEMENT')
                                                       ->where('statut', 'REUSSI')
                                                       ->sum('montant'),
-            // Taux actuel configuré
             'taux_commission_actuel'    => Setting::where('key', 'taux_commission')->value('value') ?? '5',
         ];
 
@@ -77,13 +84,11 @@ class AdminController extends Controller
     // 2. MODÉRATION CHAUFFEURS
     // =========================================================================
 
-    /**
-     * Valider, refuser ou suspendre un chauffeur.
-     * Accessible aux ADMIN et MODERATEUR.
-     */
-    public function changerStatutChauffeur(Request $request, $id)
+    public function changerStatutChauffeur(Request $request, $id): JsonResponse
     {
-        $this->checkAdmin($request);
+        if ($response = $this->checkAdmin($request)) {
+            return $response;
+        }
 
         $request->validate([
             'nouveau_statut' => 'required|in:VALIDE,REFUSE,SUSPENDU',
@@ -120,13 +125,11 @@ class AdminController extends Controller
     // 3. BANNISSEMENT
     // =========================================================================
 
-    /**
-     * Soft Delete d'un utilisateur dangereux.
-     * L'historique des transactions reste intact pour la comptabilité.
-     */
-    public function bannirUtilisateur(Request $request, $id)
+    public function bannirUtilisateur(Request $request, $id): JsonResponse
     {
-        $this->checkAdmin($request);
+        if ($response = $this->checkAdmin($request)) {
+            return $response;
+        }
 
         $user = User::findOrFail($id);
 
@@ -155,22 +158,14 @@ class AdminController extends Controller
     }
 
     // =========================================================================
-    // 4. COMMISSION — CORRIGÉ : écrit en BDD, pas dans un fichier JSON
+    // 4. COMMISSION
     // =========================================================================
 
-    /**
-     * Configure le taux de commission global de la plateforme.
-     *
-     * BUG CORRIGÉ : L'ancienne version écrivait dans storage/settings_commission.json
-     * mais terminerTrajet() lisait dans la table `settings`.
-     * Les deux écrivaient/lisaient à des endroits différents = taux jamais appliqué.
-     *
-     * CORRECTION : On utilise exclusivement la table `settings` (déjà migrée).
-     * Accessible uniquement au SUPER_ADMIN.
-     */
-    public function configurerTauxCommission(Request $request)
+    public function configurerTauxCommission(Request $request): JsonResponse
     {
-        $this->checkSuperAdmin($request);
+        if ($response = $this->checkSuperAdmin($request)) {
+            return $response;
+        }
 
         $request->validate([
             'taux' => 'required|numeric|min:0|max:100',
@@ -182,7 +177,7 @@ class AdminController extends Controller
             ['value' => $request->taux]
         );
 
-        // On log aussi qui a fait la modification pour l'audit
+        // Audit : qui a modifié et quand
         Setting::updateOrCreate(
             ['key' => 'taux_commission_modifie_par'],
             ['value' => $request->user()->id . ' — ' . now()->toDateTimeString()]
@@ -199,21 +194,19 @@ class AdminController extends Controller
     // 5. LISTE DES UTILISATEURS
     // =========================================================================
 
-    /**
-     * Récupère tous les utilisateurs pour le tableau de bord admin.
-     * Inclut une pagination légère pour éviter les timeouts.
-     */
-    public function getUsers(Request $request)
+    public function getUsers(Request $request): JsonResponse
     {
-        $this->checkAdmin($request);
+        if ($response = $this->checkAdmin($request)) {
+            return $response;
+        }
 
         $users = User::orderBy('created_at', 'desc')
-                     ->paginate(50); // 50 par page pour éviter de tout charger
+                     ->paginate(50);
 
         return response()->json([
-            'success' => true,
-            'data'    => $users->items(),
-            'total'   => $users->total(),
+            'success'      => true,
+            'data'         => $users->items(),
+            'total'        => $users->total(),
             'current_page' => $users->currentPage(),
             'last_page'    => $users->lastPage(),
         ], 200);
@@ -223,13 +216,11 @@ class AdminController extends Controller
     // 6. AJOUTER UN MODÉRATEUR
     // =========================================================================
 
-    /**
-     * Crée un compte Modérateur pour l'équipe de gestion.
-     * Réservé exclusivement au Super Admin.
-     */
-    public function ajouterModerateur(Request $request)
+    public function ajouterModerateur(Request $request): JsonResponse
     {
-        $this->checkSuperAdmin($request);
+        if ($response = $this->checkSuperAdmin($request)) {
+            return $response;
+        }
 
         $validatedData = $request->validate([
             'nom'       => 'required|string|max:255',

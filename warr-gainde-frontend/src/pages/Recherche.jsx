@@ -77,7 +77,6 @@ function Recherche() {
       return;
     }
     try {
-      // J'ai intégré tes paramètres de réservation ici !
       const response = await api.post(`/trajets/${trajetId}/reserver`, {
         nombre_places: 1,
         type_reservation: 'CLASSIQUE'
@@ -217,7 +216,8 @@ function Recherche() {
                   </p>
                 </div>
 
-                {user && user.id === trajet.conducteur_id ? (
+                {/* ✅ CORRECTION ICI */}
+                {user && user.id === trajet.conducteur_id && user.role_actuel === 'CHAUFFEUR' ? (
                   <div className="flex gap-2 mt-3">
                     <button 
                       onClick={() => handleLiberePlace(trajet.id, trajet.places_disponibles, trajet.nombre_places_totales)}
