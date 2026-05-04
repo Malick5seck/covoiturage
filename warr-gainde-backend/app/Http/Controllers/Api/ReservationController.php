@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Api\NotificationController;
 use App\Models\Reservation;
 use App\Models\Trajet;
+use App\Services\CommissionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Exception;
 
 class ReservationController extends Controller
 {
@@ -15,9 +17,6 @@ class ReservationController extends Controller
     // CRÉATION D'UNE RÉSERVATION
     // =========================================================================
 
-    /**
-     * Un passager demande à réserver une ou plusieurs places.
-     */
     public function store(Request $request)
     {
         $validatedData = $request->validate([
@@ -33,10 +32,9 @@ class ReservationController extends Controller
             'point_embarquement_long'=> 'nullable|numeric',
         ]);
 
-        $trajet    = Trajet::findOrFail($validatedData['trajet_id']);
-        $passager  = $request->user();
+        $trajet   = Trajet::findOrFail($validatedData['trajet_id']);
+        $passager = $request->user();
 
-        // Le conducteur ne peut pas réserver son propre trajet
         if ($trajet->conducteur_id === $passager->id) {
             return response()->json([
                 'success' => false,
@@ -44,7 +42,6 @@ class ReservationController extends Controller
             ], 400);
         }
 
-        // Le trajet doit être en attente (pas encore démarré)
         if ($trajet->statut !== 'EN_ATTENTE') {
             return response()->json([
                 'success' => false,
@@ -52,7 +49,6 @@ class ReservationController extends Controller
             ], 400);
         }
 
-        // Vérifier si le passager n'a pas déjà réservé ce trajet
         $dejaReserve = Reservation::where('trajet_id', $trajet->id)
                                    ->where('passager_id', $passager->id)
                                    ->whereNotIn('statut', ['ANNULEE', 'REFUSEE'])
@@ -65,12 +61,10 @@ class ReservationController extends Controller
             ], 400);
         }
 
-        // Si privatisation, le passager prend toutes les places restantes
         $nombrePlaces = $request->boolean('est_privatisee')
             ? $trajet->places_disponibles
             : $validatedData['nombre_places'];
 
-        // Vérifier la disponibilité
         if ($trajet->places_disponibles < $nombrePlaces) {
             return response()->json([
                 'success' => false,
@@ -83,7 +77,7 @@ class ReservationController extends Controller
             'trajet_id'              => $trajet->id,
             'nombre_places'          => $nombrePlaces,
             'type_reservation'       => $validatedData['type_reservation'],
-            'prix_unitaire_fige'     => $trajet->prix_par_place,
+            'prix_unitaire_fige'     => $trajet->prix_par_place, // Fixé au moment de la demande
             'est_pour_un_tiers'      => $request->boolean('est_pour_un_tiers'),
             'nom_passager_tiers'     => $validatedData['nom_passager_tiers'] ?? null,
             'tel_passager_tiers'     => $validatedData['tel_passager_tiers'] ?? null,
@@ -94,7 +88,6 @@ class ReservationController extends Controller
             'statut'                 => 'EN_ATTENTE',
         ]);
 
-        // Notifier le conducteur d'une nouvelle demande
         NotificationController::creer(
             $trajet->conducteur_id,
             'RESERVATION_RECUE',
@@ -112,29 +105,34 @@ class ReservationController extends Controller
     // ACTIONS DU CONDUCTEUR
     // =========================================================================
 
-    /**
-     * Le conducteur accepte une réservation.
-     */
     public function accepterReservation(Request $request, $id)
     {
         return DB::transaction(function () use ($request, $id) {
 
-            $reservation = Reservation::with('trajet')->findOrFail($id);
-            $trajet      = $reservation->trajet;
+            $reservation = Reservation::findOrFail($id);
+            
+            // VERROU PESSIMISTE avec chargement du conducteur pour vérifier le statut
+            $trajet = Trajet::with('conducteur')->where('id', $reservation->trajet_id)->lockForUpdate()->firstOrFail();
 
-            // Seul le conducteur du trajet peut accepter
             if ($trajet->conducteur_id !== $request->user()->id) {
                 return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
+            }
+
+            // VÉRIFICATION DU STATUT DU CONDUCTEUR
+            if ($trajet->conducteur->statut_verification !== 'VALIDE') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Votre compte doit être validé par l\'administration pour accepter des réservations.',
+                ], 403);
             }
 
             if ($reservation->statut !== 'EN_ATTENTE') {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cette réservation a déjà été traitée (statut : ' . $reservation->statut . ').',
+                    'message' => 'Cette réservation a déjà été traitée.',
                 ], 400);
             }
 
-            // Double vérification des places (race condition)
             if ($trajet->places_disponibles < $reservation->nombre_places) {
                 return response()->json([
                     'success' => false,
@@ -142,10 +140,29 @@ class ReservationController extends Controller
                 ], 400);
             }
 
+            // GESTION FINANCIÈRE AVEC LE TAUX DYNAMIQUE FIXÉ PAR L'ADMIN
+            $tauxApplique = $trajet->taux_commission_applique ?? 5.0; // Fallback de sécurité
+
+            $commissionService = new CommissionService();
+            $montantCommission = $commissionService->calculer(
+                $trajet->prix_par_place, 
+                $reservation->nombre_places, 
+                $tauxApplique
+            );
+
+            try {
+                $commissionService->prelever($trajet->conducteur_id, $trajet->id, $montantCommission);
+            } catch (Exception $e) {
+                return response()->json([
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ], 402);
+            }
+
             $reservation->update(['statut' => 'ACCEPTEE']);
             $trajet->decrement('places_disponibles', $reservation->nombre_places);
+            $trajet->increment('total_passagers_cumules', $reservation->nombre_places);
 
-            // Notifier le passager que sa réservation est acceptée
             NotificationController::creer(
                 $reservation->passager_id,
                 'RESERVATION_ACCEPTEE',
@@ -154,15 +171,12 @@ class ReservationController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Réservation acceptée. Les places ont été déduites de votre véhicule.',
+                'message' => 'Réservation acceptée. Commission prélevée et places déduites.',
                 'data'    => $reservation,
             ], 200);
         });
     }
 
-    /**
-     * Le conducteur refuse une réservation.
-     */
     public function refuserReservation(Request $request, $id)
     {
         $reservation = Reservation::with('trajet')->findOrFail($id);
@@ -180,7 +194,6 @@ class ReservationController extends Controller
 
         $reservation->update(['statut' => 'REFUSEE']);
 
-        // Notifier le passager du refus
         NotificationController::creer(
             $reservation->passager_id,
             'RESERVATION_REFUSEE',
@@ -197,15 +210,12 @@ class ReservationController extends Controller
     // ACTIONS DU PASSAGER
     // =========================================================================
 
-    /**
-     * Le passager annule sa propre réservation.
-     * Si elle était ACCEPTEE, les places sont restituées au trajet.
-     */
     public function annulerReservation(Request $request, $id)
     {
         return DB::transaction(function () use ($request, $id) {
 
-            $reservation = Reservation::with('trajet')->findOrFail($id);
+            $reservation = Reservation::findOrFail($id);
+            $trajet = Trajet::where('id', $reservation->trajet_id)->lockForUpdate()->firstOrFail();
 
             if ($reservation->passager_id !== $request->user()->id) {
                 return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
@@ -218,9 +228,25 @@ class ReservationController extends Controller
                 ], 400);
             }
 
-            // Si le conducteur avait accepté, on restitue les places
             if ($reservation->statut === 'ACCEPTEE') {
-                $reservation->trajet->increment('places_disponibles', $reservation->nombre_places);
+                $trajet->increment('places_disponibles', $reservation->nombre_places);
+                $trajet->decrement('total_passagers_cumules', $reservation->nombre_places);
+
+                $tauxApplique = $trajet->taux_commission_applique ?? 5.0;
+
+                // REMBOURSEMENT BASÉ SUR LE PRIX FIGÉ DE LA RÉSERVATION
+                $commissionService = new CommissionService();
+                $montantARembourser = $commissionService->calculer(
+                    $reservation->prix_unitaire_fige, // Utilisation du prix figé
+                    $reservation->nombre_places, 
+                    $tauxApplique
+                );
+
+                $commissionService->rembourser(
+                    $trajet->conducteur_id, 
+                    $trajet->id, 
+                    $montantARembourser
+                );
             }
 
             $motif = $request->input('motif_annulation', 'Annulée par le passager');
@@ -230,11 +256,11 @@ class ReservationController extends Controller
                 'motif_annulation' => $motif,
             ]);
 
-            // Notifier le conducteur de l'annulation
+            // UTILISATION DU TYPE DE NOTIFICATION "RESERVATION_ANNULEE" (ou "TRAJET_ANNULE")
             NotificationController::creer(
-                $reservation->trajet->conducteur_id,
-                'ANNULATION',
-                "{$request->user()->prenom} {$request->user()->nom} a annulé sa réservation sur votre trajet {$reservation->trajet->ville_depart} → {$reservation->trajet->ville_arrivee}."
+                $trajet->conducteur_id,
+                'RESERVATION_ANNULEE', 
+                "{$request->user()->prenom} {$request->user()->nom} a annulé sa réservation sur votre trajet {$trajet->ville_depart} → {$trajet->ville_arrivee}."
             );
 
             return response()->json([
@@ -248,9 +274,6 @@ class ReservationController extends Controller
     // HISTORIQUE
     // =========================================================================
 
-    /**
-     * Toutes les réservations du passager connecté.
-     */
     public function mesReservations(Request $request)
     {
         $reservations = Reservation::with([
@@ -267,10 +290,6 @@ class ReservationController extends Controller
         ], 200);
     }
 
-    /**
-     * Toutes les demandes reçues sur les trajets du conducteur connecté.
-     * Utile pour le dashboard conducteur (onglet "Demandes en attente").
-     */
     public function demandesRecues(Request $request)
     {
         $reservations = Reservation::with([
