@@ -1,15 +1,15 @@
 import axios from 'axios';
 
-// 1. Instance Axios pointant vers le back-end Laravel
 const api = axios.create({
   baseURL: 'http://localhost:8000/api',
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json'
-  }
+  },
+  withCredentials: true,   // ← pour envoyer les cookies (CSRF, session)
 });
 
-// 2. Intercepteur de requête : attache automatiquement le token Sanctum
+// Intercepteur de requête : attacher le token Bearer
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
@@ -18,7 +18,7 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// 3. Intercepteur de réponse : gestion des erreurs 401 (token expiré ou invalide)
+// Intercepteur de réponse : redirection si 401
 api.interceptors.response.use(
   response => response,
   error => {

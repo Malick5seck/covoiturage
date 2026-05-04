@@ -58,12 +58,18 @@ class AdminController extends Controller
 
         $stats = [
             'total_utilisateurs'        => User::count(),
-            'total_chauffeurs'          => User::where('role_actuel', 'CHAUFFEUR')->count(),
-            'total_passagers'           => User::where('role_actuel', 'PASSAGER')->count(),
+            'total_chauffeurs'          => User::where('role_actuel', 'CHAUFFEUR')
+                                               ->whereNull('niveau_accreditation')
+                                               ->count(),
+            'total_passagers'           => User::where('role_actuel', 'PASSAGER')
+                                               ->whereNull('niveau_accreditation')
+                                               ->count(),
             'chauffeurs_en_attente'     => User::where('role_actuel', 'CHAUFFEUR')
+                                               ->whereNull('niveau_accreditation')
                                                ->where('statut_verification', 'EN_ATTENTE')
                                                ->count(),
             'chauffeurs_valides'        => User::where('role_actuel', 'CHAUFFEUR')
+                                               ->whereNull('niveau_accreditation')
                                                ->where('statut_verification', 'VALIDE')
                                                ->count(),
             'trajets_en_cours'          => Trajet::where('statut', 'EN_COURS')->count(),

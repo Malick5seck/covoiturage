@@ -7,23 +7,17 @@ function AdminDashboard() {
   const navigate = useNavigate();
   const [user] = useState(() => getUser());
 
-  // États des données
   const [stats, setStats] = useState(null);
   const [usersList, setUsersList] = useState([]);
   const [tauxCommission, setTauxCommission] = useState('');
-  
-  // États d'interface
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // États pour la création de modérateur
   const [modData, setModData] = useState({ nom: '', prenom: '', telephone: '', email: '', password: '' });
   const [creatingMod, setCreatingMod] = useState(false);
 
-  // 1. CHARGEMENT DES DONNÉES
   useEffect(() => {
-    // Sécurité : Accessible à tout le staff (role_actuel === 'ADMIN')
-    // La distinction Modérateur/Super Admin se fera sur le niveau_accreditation pour l'affichage
     if (!user || user.role_actuel !== 'ADMIN') {
       navigate('/');
       return;
@@ -31,15 +25,25 @@ function AdminDashboard() {
 
     const fetchAdminData = async () => {
       setLoading(true);
+      setError('');
       try {
         const [statsRes, usersRes] = await Promise.all([
           api.get('/admin/stats'),
           api.get('/admin/users')
         ]);
+
+        // Stats
         setStats(statsRes.data.data);
-        setUsersList(usersRes.data.data);
+
+        // Utilisateurs : s'adapter à la structure paginée
+        const usersData = usersRes.data.data || usersRes.data || [];
+        setUsersList(Array.isArray(usersData) ? usersData : usersData.data || []);
       } catch (err) {
-        setError("Erreur de connexion avec l'API Admin.");
+        // Afficher le vrai code et le message backend
+        console.error('Erreur Admin API:', err.response);
+        const status = err.response?.status;
+        const message = err.response?.data?.message || err.message;
+        setError(`Erreur ${status ? status + ' : ' : ''}${message}`);
       } finally {
         setLoading(false);
       }
@@ -48,26 +52,24 @@ function AdminDashboard() {
     fetchAdminData();
   }, [user, navigate]);
 
-  // 2. CHANGER LE TAUX DE COMMISSION (Admin uniquement)
   const handleCommissionSubmit = async (e) => {
     e.preventDefault();
     try {
       const res = await api.post('/admin/commission', { taux: tauxCommission });
-      if(res.data.success) {
+      if (res.data.success) {
         alert("✅ " + res.data.message);
         setTauxCommission('');
       }
     } catch (err) {
-      alert("Erreur lors de la mise à jour de la commission.");
+      alert(err.response?.data?.message || "Erreur lors de la mise à jour de la commission.");
     }
   };
 
-  // 3. MODÉRATION CHAUFFEUR
   const handleChauffeurStatus = async (id, nouveauStatut) => {
     if (!window.confirm(`Passer ce chauffeur en ${nouveauStatut} ?`)) return;
     try {
       const res = await api.post(`/admin/chauffeurs/${id}/statut`, { nouveau_statut: nouveauStatut });
-      if(res.data.success) {
+      if (res.data.success) {
         setUsersList(usersList.map(u => u.id === id ? { ...u, statut_verification: nouveauStatut } : u));
       }
     } catch (err) {
@@ -75,12 +77,11 @@ function AdminDashboard() {
     }
   };
 
-  // 4. BANNISSEMENT
   const handleBanUser = async (id) => {
     if (!window.confirm("Bannir définitivement cet utilisateur ? (Soft Delete)")) return;
     try {
       const res = await api.delete(`/admin/users/${id}`);
-      if(res.data.success) {
+      if (res.data.success) {
         setUsersList(usersList.filter(u => u.id !== id));
       }
     } catch (err) {
@@ -88,7 +89,6 @@ function AdminDashboard() {
     }
   };
 
-  // 5. AJOUTER UN MODÉRATEUR (Admin uniquement)
   const handleAddModerator = async (e) => {
     e.preventDefault();
     setCreatingMod(true);
@@ -110,8 +110,6 @@ function AdminDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto py-10 px-4">
-      
-      {/* HEADER */}
       <div className="mb-10 flex flex-col md:flex-row justify-between items-center bg-gainde-dark text-white p-8 rounded-3xl shadow-lg">
         <div>
           <h1 className="text-3xl font-black">Administration Warr Gaïndé</h1>
@@ -124,8 +122,6 @@ function AdminDashboard() {
       {error && <div className="bg-red-50 text-red-600 p-4 rounded-xl font-bold mb-8">{error}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-        
-        {/* STATISTIQUES GLOBALES */}
         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
             <p className="text-gray-500 font-bold mb-1">Total Inscrits</p>
@@ -139,8 +135,6 @@ function AdminDashboard() {
             <p className="text-gray-500 font-bold mb-1">Trajets en cours</p>
             <h3 className="text-4xl font-black text-blue-600">{stats?.trajets_en_cours}</h3>
           </div>
-          
-          {/* CHIFFRE D'AFFAIRES (Visible uniquement si l'Admin n'est PAS un Modérateur) */}
           {user?.niveau_accreditation !== 'MODERATEUR' ? (
             <div className="bg-gainde-yellow p-6 rounded-3xl shadow-sm border border-yellow-400">
               <p className="text-gainde-dark font-bold mb-1">Revenus Plateforme</p>
@@ -153,11 +147,8 @@ function AdminDashboard() {
           )}
         </div>
 
-        {/* ACTIONS SUPER ADMIN (Masquées pour les modérateurs) */}
         {user?.niveau_accreditation !== 'MODERATEUR' && (
           <div className="space-y-6">
-            
-            {/* RÉGLAGE COMMISSION */}
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
               <h3 className="text-xl font-bold text-gainde-dark mb-4">💰 Taux de Commission</h3>
               <form onSubmit={handleCommissionSubmit}>
@@ -176,7 +167,6 @@ function AdminDashboard() {
               </form>
             </div>
 
-            {/* CRÉER UN MODÉRATEUR */}
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
               <h3 className="text-xl font-bold text-gainde-dark mb-4">👮 Équipe Modération</h3>
               <form onSubmit={handleAddModerator} className="space-y-3">
@@ -198,12 +188,10 @@ function AdminDashboard() {
                 </button>
               </form>
             </div>
-
           </div>
         )}
       </div>
 
-      {/* LISTE DES UTILISATEURS (Modération) */}
       <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100">
           <h2 className="text-xl font-bold text-gainde-dark">Gestion des Comptes</h2>
@@ -245,7 +233,6 @@ function AdminDashboard() {
                     )}
                   </td>
                   <td className="p-4 flex items-center justify-center gap-2">
-                    {/* Actions Chauffeur */}
                     {u.role_actuel === 'CHAUFFEUR' && (
                       <>
                         <button onClick={() => handleChauffeurStatus(u.id, 'VALIDE')} className="bg-green-100 text-green-700 px-3 py-1 rounded text-xs font-bold hover:bg-green-200">
@@ -256,7 +243,6 @@ function AdminDashboard() {
                         </button>
                       </>
                     )}
-                    {/* Bannir (Soft Delete) - On empêche de bannir un ADMIN (ou un modérateur) */}
                     {u.role_actuel !== 'ADMIN' && (
                       <button onClick={() => handleBanUser(u.id)} className="bg-red-50 text-red-600 px-3 py-1 rounded text-xs font-bold hover:bg-red-100">
                         Bannir

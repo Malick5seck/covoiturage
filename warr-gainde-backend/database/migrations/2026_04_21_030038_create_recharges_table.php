@@ -17,7 +17,7 @@ return new class extends Migration
             $table->foreignId('trajet_id')->nullable()->constrained('trajets')->onDelete('cascade');
             
             $table->decimal('montant', 10, 2);
-            $table->enum('type_transaction', ['RECHARGE', 'PRELEVEMENT']);
+            $table->enum('type_transaction', ['RECHARGE', 'PRELEVEMENT', 'REMBOURSEMENT']);
             $table->enum('statut', ['EN_ATTENTE', 'REUSSI', 'ECHOUE'])->default('EN_ATTENTE');
             $table->string('transaction_id')->nullable(); 
             

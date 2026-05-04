@@ -5,12 +5,10 @@ import api from '../api/axios';
 function Recherche() {
   const [searchParams, setSearchParams] = useSearchParams();
   
-  // Paramètres lus depuis l'URL
   const depart = searchParams.get('depart') || '';
   const arrivee = searchParams.get('arrivee') || '';
   const date = searchParams.get('date') || '';
 
-  // États locaux pour le formulaire de recherche en haut de page
   const [localDepart, setLocalDepart] = useState(depart);
   const [localArrivee, setLocalArrivee] = useState(arrivee);
   const [localDate, setLocalDate] = useState(date);
@@ -22,7 +20,6 @@ function Recherche() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // 1. RECHERCHE DYNAMIQUE (Se lance au chargement et quand l'URL change)
   useEffect(() => {
     const fetchTrajets = async () => {
       setLoading(true);
@@ -41,7 +38,6 @@ function Recherche() {
     fetchTrajets();
   }, [depart, arrivee, date]);
 
-  // 2. SOUMISSION DU NOUVEAU FORMULAIRE
   const handleNouvelleRecherche = (e) => {
     e.preventDefault();
     setSearchParams({ depart: localDepart, arrivee: localArrivee, date: localDate });
@@ -94,7 +90,7 @@ function Recherche() {
   return (
     <div className="max-w-5xl mx-auto py-8 px-4">
       
-      {/* EN-TÊTE : LE FORMULAIRE DE RECHERCHE INTÉGRÉ */}
+      {/* FORMULAIRE DE RECHERCHE */}
       <div className="bg-gainde-dark rounded-3xl shadow-lg p-6 mb-8">
         <form onSubmit={handleNouvelleRecherche} className="flex flex-col md:flex-row gap-4 items-end">
           <div className="w-full md:flex-1">
@@ -150,7 +146,6 @@ function Recherche() {
         </div>
       )}
       
-      {/* Résultat Vide */}
       {!loading && !error && trajets.length === 0 && (
         <div className="text-center py-20 bg-white rounded-3xl border border-gray-100 shadow-sm">
           <div className="text-5xl mb-4">📭</div>
@@ -161,7 +156,6 @@ function Recherche() {
         </div>
       )}
 
-      {/* Liste des Trajets */}
       {!loading && trajets.length > 0 && (
         <div className="grid grid-cols-1 gap-6">
           {trajets.map((trajet) => (
@@ -171,7 +165,7 @@ function Recherche() {
               <div className="flex items-center gap-4 w-full md:w-1/3">
                 <div className="w-14 h-14 bg-gainde-yellow rounded-full flex items-center justify-center text-xl font-black text-gainde-dark border border-gray-100 overflow-hidden">
                   {trajet.conducteur?.photo_profil ? (
-                    <img src={`http://localhost:8000/storage/${trajet.conducteur.photo_profil}`} alt="Chauffeur" className="w-full h-full object-cover" />
+                    <img src={trajet.conducteur.photo_profil} alt="Chauffeur" className="w-full h-full object-cover" />
                   ) : (
                     trajet.conducteur?.prenom?.charAt(0)
                   )}
@@ -186,7 +180,7 @@ function Recherche() {
                 </div>
               </div>
 
-              {/* Infos Itinéraire */}
+              {/* Itinéraire */}
               <div className="flex flex-col items-center w-full md:w-1/3">
                 <div className="flex justify-between w-full text-sm font-bold text-gray-400 mb-1">
                   <span>{trajet.date_heure_depart?.substring(11,16)}</span>
@@ -205,7 +199,7 @@ function Recherche() {
                 </div>
               </div>
 
-              {/* Prix & ACTIONS */}
+              {/* Prix & Actions */}
               <div className="flex flex-row md:flex-col justify-between items-center md:items-end w-full md:w-1/3">
                 <div className="text-right">
                   <p className="text-2xl font-black text-gainde-dark">
@@ -216,7 +210,6 @@ function Recherche() {
                   </p>
                 </div>
 
-                {/* ✅ CORRECTION ICI */}
                 {user && user.id === trajet.conducteur_id && user.role_actuel === 'CHAUFFEUR' ? (
                   <div className="flex gap-2 mt-3">
                     <button 

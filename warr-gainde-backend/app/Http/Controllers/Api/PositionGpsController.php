@@ -42,8 +42,9 @@ class PositionGpsController extends Controller
      */
     public function dernierePosition($trajetId)
     {
+        // Utiliser date_position (colonne existante) et non created_at
         $position = PositionGps::where('trajet_id', $trajetId)
-                               ->orderBy('created_at', 'desc')
+                               ->orderBy('date_position', 'desc')
                                ->first();
 
         if (!$position) {
@@ -58,7 +59,7 @@ class PositionGpsController extends Controller
             'data'    => [
                 'lat'        => (float) $position->latitude,
                 'lng'        => (float) $position->longitude,
-                'updated_at' => $position->created_at->diffForHumans(),
+                'date_position' => $position->date_position->toDateTimeString(),
             ],
         ]);
     }

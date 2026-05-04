@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
@@ -10,7 +9,6 @@ function Profil() {
     return userString ? JSON.parse(userString) : null;
   });
 
-  // État pour les informations de base
   const [formData, setFormData] = useState({
     nom: user?.nom || '',
     prenom: user?.prenom || '',
@@ -18,7 +16,6 @@ function Profil() {
     email: user?.email || ''
   });
 
-  // NOUVEAU : État spécifique pour les mots de passe
   const [passwordData, setPasswordData] = useState({
     ancien_mot_de_passe: '',
     nouveau_mot_de_passe: '',
@@ -26,7 +23,11 @@ function Profil() {
   });
 
   const [photo, setPhoto] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(user?.photo_profil ? `$url = asset('storage/' . $path);` : null);
+  const [photoPreview, setPhotoPreview] = useState(
+    user?.photo_profil
+      ? `http://localhost:8000/storage/${user.photo_profil}`
+      : null
+  );
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
@@ -34,37 +35,33 @@ function Profil() {
     if (!user) navigate('/login');
   }, [user, navigate]);
 
-  // Gérer le changement de texte (Infos de base)
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // NOUVEAU : Gérer le changement de texte (Mots de passe)
   const handlePasswordChange = (e) => {
     setPasswordData({ ...passwordData, [e.target.name]: e.target.value });
   };
 
-  // Gérer la sélection d'une image
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setPhoto(file);
-      setPhotoPreview(URL.createObjectURL(file)); // Aperçu local immédiat
+      setPhotoPreview(URL.createObjectURL(file)); // local preview
     }
   };
 
-  // Soumettre la mise à jour (Texte + Image + Mot de passe conditionnel)
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setMessage({ type: '', text: '' });
 
     try {
-      // 1. Mise à jour des informations textes de base
+      // 1. Update text fields
       const resInfos = await api.put('/profil', formData);
       let updatedUser = resInfos.data.user;
 
-      // 2. S'il y a une photo sélectionnée, on l'envoie
+      // 2. Upload photo if selected
       if (photo) {
         const photoData = new FormData();
         photoData.append('photo', photo);
@@ -73,20 +70,23 @@ function Profil() {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
         
-        updatedUser = { ...updatedUser, photo_profil: resPhoto.data.photo_url.split('/storage/')[1] };
+        // The backend returns a full URL like http://.../storage/abc.jpg
+        // We store only the filename part (after /storage/)
+        updatedUser = {
+          ...updatedUser,
+          photo_profil: resPhoto.data.photo_url.split('/storage/')[1]
+        };
+        // Update the preview to the uploaded image (still using the local object URL is fine,
+        // but after success we could also set it to the new remote URL)
+        setPhotoPreview(`http://localhost:8000/storage/${updatedUser.photo_profil}`);
       }
 
-      // 3. NOUVEAU : S'il y a une tentative de changement de mot de passe
+      // 3. Change password if provided
       if (passwordData.ancien_mot_de_passe || passwordData.nouveau_mot_de_passe) {
-        // Vérification frontend basique (le backend vérifiera aussi)
         if (passwordData.nouveau_mot_de_passe !== passwordData.nouveau_mot_de_passe_confirmation) {
           throw new Error("Les nouveaux mots de passe ne correspondent pas.");
         }
-        
-        // Appel à l'endpoint spécifique pour le mot de passe
-        await api.post('/profil/mot-de-passe', passwordData); 
-        
-        // On vide les champs de mot de passe une fois le succès confirmé
+        await api.post('/profil/mot-de-passe', passwordData);
         setPasswordData({
           ancien_mot_de_passe: '',
           nouveau_mot_de_passe: '',
@@ -94,14 +94,16 @@ function Profil() {
         });
       }
 
-      // Mise à jour du LocalStorage et de l'état React
+      // Update localStorage and local state
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
       setMessage({ type: 'success', text: 'Profil mis à jour avec succès !' });
 
     } catch (err) {
-      // On attrape soit l'erreur manuelle (mots de passe non identiques), soit l'erreur de l'API
-      setMessage({ type: 'error', text: err.message || err.response?.data?.message || 'Erreur lors de la mise à jour.' });
+      setMessage({
+        type: 'error',
+        text: err.message || err.response?.data?.message || 'Erreur lors de la mise à jour.'
+      });
     } finally {
       setLoading(false);
     }
@@ -123,7 +125,7 @@ function Profil() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           
-          {/* SECTION PHOTO */}
+          {/* PHOTO SECTION */}
           <div className="flex flex-col items-center mb-8 pb-8 border-b border-gray-100">
             <div className="relative">
               <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-200 border-4 border-white shadow-lg flex items-center justify-center text-4xl font-bold text-gray-400">
@@ -141,7 +143,7 @@ function Profil() {
             <p className="text-sm text-gray-500 mt-3">Cliquez sur l'icône pour modifier votre avatar</p>
           </div>
 
-          {/* SECTION INFOS */}
+          {/* USER INFO FIELDS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Prénom</label>
@@ -165,7 +167,7 @@ function Profil() {
             </div>
           </div>
           
-          {/* SECTION MOT DE PASSE */}
+          {/* PASSWORD SECTION */}
           <div className="mt-10 pt-8 border-t border-gray-100">
             <h3 className="font-bold text-gainde-dark mb-4">🔒 Changer de mot de passe</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

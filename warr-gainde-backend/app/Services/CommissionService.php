@@ -21,8 +21,13 @@ class CommissionService
 
     /**
      * Calcule le montant de la commission en FCFA (entier).
+     *
+     * @param float $prixParPlace          Prix unitaire (peut venir d'un decimal(10,2))
+     * @param int   $placesOccupees
+     * @param float $tauxCommissionApplique Exemple : 5.0 pour 5 %
+     * @return int  Montant de la commission en FCFA (entier)
      */
-    public function calculer(int $prixParPlace, int $placesOccupees, float $tauxCommissionApplique): int
+    public function calculer(float $prixParPlace, int $placesOccupees, float $tauxCommissionApplique): int
     {
         $montantTotal = $prixParPlace * $placesOccupees;
         return (int) round($montantTotal * ($tauxCommissionApplique / 100));
@@ -34,7 +39,7 @@ class CommissionService
     public function calculerCommissionTrajet(Trajet $trajet): int
     {
         return $this->calculer(
-            $trajet->prix_par_place,
+            (float) $trajet->prix_par_place,
             $trajet->total_passagers_cumules,
             (float) $trajet->taux_commission_applique
         );
@@ -78,10 +83,8 @@ class CommissionService
     private function ajusterSolde(int $conducteurId, ?int $trajetId, int $montant, string $typeTransaction): int
     {
         return DB::transaction(function () use ($conducteurId, $trajetId, $montant, $typeTransaction) {
-            // Verrouiller l'utilisateur pour éviter les race conditions
             $conducteur = User::where('id', $conducteurId)->lockForUpdate()->firstOrFail();
 
-            // Déterminer la direction (débit ou crédit) selon le type
             switch ($typeTransaction) {
                 case 'PRELEVEMENT':
                     if ($conducteur->solde_portefeuille < $montant) {
@@ -103,7 +106,6 @@ class CommissionService
 
             $conducteur->refresh();
 
-            // Tracer l'opération dans l'historique comptable
             Recharge::create([
                 'conducteur_id'    => $conducteurId,
                 'trajet_id'        => $trajetId,

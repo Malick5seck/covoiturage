@@ -8,7 +8,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\VehiculeController;
 use App\Http\Controllers\Api\TrajetController;
 use App\Http\Controllers\Api\ReservationController;
-use App\Http\Controllers\Api\EvaluationController; // On garde celui-là ou ReviewController
+use App\Http\Controllers\Api\EvaluationController;
 use App\Http\Controllers\Api\RechargeController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\UploadController;
@@ -44,15 +44,14 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/profil/mot-de-passe', [AuthController::class, 'changerMotDePasse']);
 
     // --- VÉHICULES ---
-    // Utilise l'API Resource pour index, store, show, update, destroy
     Route::apiResource('vehicules', VehiculeController::class);
     Route::post('/vehicules/{id}/photo', [UploadController::class, 'uploadPhotoVehicule']);
-    Route::post('/user/photo', [UploadController::class, 'uploadPhotoProfil']); // Pour la photo de profil
+    Route::post('/user/photo', [UploadController::class, 'uploadPhotoProfil']);
 
     // --- TRAJETS (CHAUFFEUR) ---
     Route::post('/trajets', [TrajetController::class, 'store']);
-    Route::get('/mes-trajets', [TrajetController::class, 'mesTrajets']); // Pour le Dashboard
-    Route::get('/trajets/{id}/passagers', [TrajetController::class, 'listePassagers']); // Feuille de route
+    Route::get('/mes-trajets', [TrajetController::class, 'mesTrajets']);
+    Route::get('/trajets/{id}/passagers', [TrajetController::class, 'listePassagers']);
 
     // Cycle de vie
     Route::post('/trajets/{id}/demarrer', [TrajetController::class, 'demarrerTrajet']);
@@ -60,25 +59,27 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/trajets/{id}/annuler', [TrajetController::class, 'annulerTrajet']);
     Route::post('/trajets/{id}/passager-manuel', [TrajetController::class, 'ajouterPassagerManuel']);
     Route::post('/trajets/{id}/place-liberee', [TrajetController::class, 'libererPlaceManuelle']);
-    // Historique du parcours (conducteur/admin uniquement)
+
+    // Historique du parcours (conducteur/admin)
     Route::get('/trajets/{trajetId}/gps/historique', [PositionGpsController::class, 'historiquePositions']);
-    Route::get('/trajets/{trajetId}/gps/derniere', [PositionGpsController::class, 'dernierePosition']);
+    // La route GET /derniere est définie une seule fois ci-dessous
 
     // --- RÉSERVATIONS (PASSAGER) ---
     Route::post('/trajets/{id}/reserver', [ReservationController::class, 'store']);
-    Route::get('/mes-reservations', [ReservationController::class, 'mesReservations']); // Pour le Dashboard
+    Route::get('/mes-reservations', [ReservationController::class, 'mesReservations']);
 
-    // Actions sur résas
     Route::post('/reservations/{id}/accepter', [ReservationController::class, 'accepterReservation']);
     Route::post('/reservations/{id}/refuser', [ReservationController::class, 'refuserReservation']);
     Route::post('/reservations/{id}/annuler', [ReservationController::class, 'annulerReservation']);
 
     // --- ÉVALUATIONS ---
     Route::post('/chauffeurs/{id}/evaluations', [EvaluationController::class, 'store']);
+
     // --- PORTEFEUILLE ---
     Route::post('/portefeuille/initier', [RechargeController::class, 'initierRecharge']);
     Route::post('/portefeuille/verifier/{token}', [RechargeController::class, 'verifierStatut']);
     Route::get('/portefeuille/historique', [RechargeController::class, 'historique']);
+
     // --- GPS ---
     Route::post('/trajets/{trajetId}/gps', [PositionGpsController::class, 'enregistrerPosition']);
     Route::get('/trajets/{trajetId}/gps/derniere', [PositionGpsController::class, 'dernierePosition']);
@@ -90,16 +91,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // --- 🛡️ ZONE ADMIN ---
     Route::prefix('admin')->group(function () {
-        // Stats pour les cartes du Dashboard Admin
         Route::get('/stats', [AdminController::class, 'getDashboardStats']);
-        // Liste des users pour le tableau
         Route::get('/users', [AdminController::class, 'getUsers']);
-        // Modération
         Route::post('/chauffeurs/{id}/statut', [AdminController::class, 'changerStatutChauffeur']);
         Route::delete('/users/{id}', [AdminController::class, 'bannirUtilisateur']);
-        // Configuration JSON
         Route::post('/commission', [AdminController::class, 'configurerTauxCommission']);
-        // Gestion de l'équipe
         Route::post('/moderateurs', [AdminController::class, 'ajouterModerateur']);
     });
 });

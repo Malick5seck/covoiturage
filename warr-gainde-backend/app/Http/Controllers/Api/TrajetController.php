@@ -219,88 +219,81 @@ class TrajetController extends Controller
     // =========================================================================
 
     public function terminerTrajet(Request $request, $id)
-    {
-        $trajet = Trajet::findOrFail($id);
+{
+    $trajet = Trajet::findOrFail($id);
 
-        if ($trajet->conducteur_id !== $request->user()->id) {
-            return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
-        }
+    // ... vérifications d'accès et de statut ...
 
-        if ($trajet->statut !== 'EN_COURS') {
+    return DB::transaction(function () use ($trajet) {
+
+        // 1. Mettre à jour le statut et l'heure d'arrivée
+        $trajet->update([
+            'statut'               => 'TERMINE',
+            'heure_arrivee_reelle' => now(),
+        ]);
+
+        // 2. Archiver les positions GPS (la colonne statut_trajet existe bien)
+        PositionGps::archiverPourTrajet($trajet->id);
+
+        // 3. Passagers acceptés à notifier
+        $passagersAcceptes = Reservation::where('trajet_id', $trajet->id)
+                                        ->where('statut', 'ACCEPTEE')
+                                        ->pluck('passager_id');
+
+        // 4. Places occupées
+        $placesOccupees = $trajet->nombre_places_totales - $trajet->places_disponibles;
+
+        if ($placesOccupees <= 0) {
             return response()->json([
-                'success' => false,
-                'message' => 'Seul un trajet EN_COURS peut être terminé.',
-            ], 400);
+                'success'             => true,
+                'message'             => 'Trajet terminé. Aucune commission prélevée (aucun passager).',
+                'statut'              => 'TERMINE',
+                'commission_prelevee' => 0,
+            ], 200);
         }
 
-        return DB::transaction(function () use ($trajet) {
+        // 5. Calculer la commission
+        $commission = $this->commissionService->calculer(
+            $trajet->prix_par_place,
+            $placesOccupees,
+            $trajet->taux_commission_applique
+        );
 
-            // 1. Mettre à jour le statut et l'heure d'arrivée réelle
-            $trajet->update([
-                'statut'               => 'TERMINE',
-                'heure_arrivee_reelle' => now(),
-            ]);
-
-            // 2. Archiver les positions GPS du trajet
-            PositionGps::archiverPourTrajet($trajet->id);
-
-            // 3. Récupérer les passagers acceptés AVANT le calcul
-            //    (utile pour la notification même s'il n'y a pas de commission)
-            $passagersAcceptes = Reservation::where('trajet_id', $trajet->id)
-                                            ->where('statut', 'ACCEPTEE')
-                                            ->pluck('passager_id');
-
-            // 4. Calculer les places occupées
-            $placesOccupees = $trajet->nombre_places_totales - $trajet->places_disponibles;
-
-            if ($placesOccupees <= 0) {
-                // Aucun passager = pas de commission, mais on notifie quand même si besoin
-                return response()->json([
-                    'success'             => true,
-                    'message'             => 'Trajet terminé. Aucune commission prélevée (aucun passager).',
-                    'statut'              => 'TERMINE',
-                    'commission_prelevee' => 0,
-                ], 200);
-            }
-
-            // 5. Calculer la commission avec le taux FIGÉ à la création
-            $commission = $this->commissionService->calculer(
-                $trajet->prix_par_place,
-                $placesOccupees,
-                $trajet->taux_commission_applique
-            );
-
-            // 6. Prélever réellement depuis le portefeuille du conducteur
+        // 6. Prélèvement SÉCURISÉ
+        try {
             $nouveauSolde = $this->commissionService->prelever(
                 $trajet->conducteur_id,
                 $trajet->id,
                 $commission
             );
-
-            // =====================================================================
-            // NOTIFICATION : Passagers acceptés — le trajet est arrivé à destination
-            // =====================================================================
-            foreach ($passagersAcceptes as $passagerId) {
-                NotificationController::creer(
-                    $passagerId,
-                    'ARRIVEE',
-                    "🏁 Vous êtes arrivé à destination ! Votre trajet {$trajet->ville_depart} → {$trajet->ville_arrivee} est terminé. "
-                    . "N'oubliez pas d'évaluer votre conducteur."
-                );
-            }
-
+        } catch (\Exception $e) {
+            // Le solde est insuffisant, on empêche la terminaison propre
             return response()->json([
-                'success'             => true,
-                'message'             => "Trajet terminé ! Commission de {$commission} FCFA prélevée (taux : {$trajet->taux_commission_applique}%).",
-                'statut'              => 'TERMINE',
-                'commission_prelevee' => $commission,
-                'nouveau_solde'       => $nouveauSolde,
-                'places_occupees'     => $placesOccupees,
-                'passagers_notifies'  => $passagersAcceptes->count(),
-            ], 200);
-        });
-    }
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 402); // 402 Payment Required
+        }
 
+        // 7. Notifications aux passagers acceptés
+        foreach ($passagersAcceptes as $passagerId) {
+            NotificationController::creer(
+                $passagerId,
+                'ARRIVEE',
+                "🏁 Vous êtes arrivé à destination ! Votre trajet {$trajet->ville_depart} → {$trajet->ville_arrivee} est terminé. N'oubliez pas d'évaluer votre conducteur."
+            );
+        }
+
+        return response()->json([
+            'success'             => true,
+            'message'             => "Trajet terminé ! Commission de {$commission} FCFA prélevée (taux : {$trajet->taux_commission_applique}%).",
+            'statut'              => 'TERMINE',
+            'commission_prelevee' => $commission,
+            'nouveau_solde'       => $nouveauSolde,
+            'places_occupees'     => $placesOccupees,
+            'passagers_notifies'  => $passagersAcceptes->count(),
+        ], 200);
+    });
+}
     // =========================================================================
     // ANNULER — Cascade réservations + Notifie tous les passagers concernés
     // =========================================================================

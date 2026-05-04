@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             
             $table->enum('type', [
-                'RESERVATION_RECUE', 'RESERVATION_ACCEPTEE', 'RESERVATION_REFUSEE', 
+                'RESERVATION_RECUE', 'RESERVATION_ACCEPTEE', 'RESERVATION_REFUSEE','RESERVATION_ANNULEE', 
                 'TRAJET_PLEIN', 'DEPART_IMMINENT', 'ARRIVEE', 'ANNULATION', 
                 'PAIEMENT_VALIDE', 'RECHARGE_EFFECTUEE'
             ]);
