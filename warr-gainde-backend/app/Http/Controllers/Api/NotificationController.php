@@ -2,14 +2,19 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Events\NotificationEnvoyee;
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
+    // =========================================================================
+    // LECTURE — liste des notifications de l'utilisateur connecté
+    // =========================================================================
 
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
         $user = $request->user();
 
@@ -26,14 +31,16 @@ class NotificationController extends Controller
         ], 200);
     }
 
-   
-    public function marquerCommeLue(Request $request, $id)
+    // =========================================================================
+    // MARQUER UNE notification comme lue
+    // =========================================================================
+
+    public function marquerCommeLue(Request $request, $id): JsonResponse
     {
         $notification = Notification::where('id', $id)
                                      ->where('user_id', $request->user()->id)
                                      ->firstOrFail();
 
-        // Si déjà lue, on ne fait rien (idempotent)
         if ($notification->date_lecture !== null) {
             return response()->json([
                 'success' => true,
@@ -51,8 +58,11 @@ class NotificationController extends Controller
         ], 200);
     }
 
+    // =========================================================================
+    // MARQUER TOUTES comme lues
+    // =========================================================================
 
-    public function marquerToutesCommeLues(Request $request)
+    public function marquerToutesCommeLues(Request $request): JsonResponse
     {
         $count = Notification::where('user_id', $request->user()->id)
                               ->whereNull('date_lecture')
@@ -65,14 +75,35 @@ class NotificationController extends Controller
         ], 200);
     }
 
+    // =========================================================================
+    // CRÉER une notification + broadcast temps réel
+    //
+    // Méthode statique appelée par tous les autres contrôleurs.
+    // Le broadcast est enveloppé dans un try/catch pour ne jamais
+    // bloquer le flux métier si Reverb est hors ligne.
+    // =========================================================================
+
     public static function creer(int $userId, string $type, string $message): Notification
     {
-        return Notification::create([
-            'user_id'          => $userId,
-            'type'             => $type,
-            'message'          => $message,
+        $notification = Notification::create([
+            'user_id'           => $userId,
+            'type'              => $type,
+            'message'           => $message,
             'date_notification' => now(),
-            'date_lecture'     => null, // Non lue par défaut
+            'date_lecture'      => null,
         ]);
+
+        // Broadcast WebSocket vers le canal privé de l'utilisateur
+        try {
+            broadcast(new NotificationEnvoyee($notification));
+        } catch (\Throwable $e) {
+            // Reverb hors ligne → la notif est quand même sauvegardée en BDD.
+            // Ne pas faire échouer l'opération métier pour ça.
+            \Illuminate\Support\Facades\Log::warning(
+                "Broadcast notification échoué (user #{$userId}) : " . $e->getMessage()
+            );
+        }
+
+        return $notification;
     }
 }

@@ -34,7 +34,7 @@ class UserSeeder extends Seeder
             'statut_verification' => 'VALIDE',
         ]);
 
-        // 3. UN CHAUFFEUR DE TEST (Pour tes essais sur Postman)
+        // 3. UN CHAUFFEUR DE TEST 
         User::create([
             'nom' => 'Ndiaye',
             'prenom' => 'Moussa',

@@ -1,9 +1,9 @@
 <?php
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
-// Importation des Contrôleurs
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\VehiculeController;
 use App\Http\Controllers\Api\TrajetController;
@@ -29,67 +29,90 @@ Route::post('/recharges/webhook', [RechargeController::class, 'webhook']);
 
 /*
 |--------------------------------------------------------------------------
-| 🔴 ROUTES PROTÉGÉES (Sanctum)
+| 🔴 ROUTES PROTÉGÉES (Sanctum Bearer Token)
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth:sanctum'])->group(function () {
 
-    // --- PROFIL & UTILISATEUR ---
-    Route::get('/user', function (Request $request) {
-        return $request->user();
+    // =========================================================================
+    // AUTH BROADCASTING — canal privé Reverb via Bearer token
+    //
+    // Laravel cherche par défaut /broadcasting/auth sur le guard "web" (session).
+    // Ici on expose la même logique via l'API guard Sanctum pour que
+    // le frontend puisse s'authentifier avec son Bearer token.
+    // =========================================================================
+    Route::post('/broadcasting/auth', function (Request $request) {
+        return Broadcast::auth($request);
     });
+
+    // -------------------------------------------------------------------------
+    // PROFIL & UTILISATEUR
+    // -------------------------------------------------------------------------
+    Route::get('/user', fn (Request $request) => $request->user());
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profil', [AuthController::class, 'updateProfile']);
     Route::post('/profil/photo', [UploadController::class, 'uploadPhotoProfil']);
     Route::post('/profil/mot-de-passe', [AuthController::class, 'changerMotDePasse']);
 
-    // --- VÉHICULES ---
+    // -------------------------------------------------------------------------
+    // VÉHICULES
+    // -------------------------------------------------------------------------
     Route::apiResource('vehicules', VehiculeController::class);
     Route::post('/vehicules/{id}/photo', [UploadController::class, 'uploadPhotoVehicule']);
     Route::post('/user/photo', [UploadController::class, 'uploadPhotoProfil']);
 
-    // --- TRAJETS (CHAUFFEUR) ---
+    // -------------------------------------------------------------------------
+    // TRAJETS (CHAUFFEUR)
+    // -------------------------------------------------------------------------
     Route::post('/trajets', [TrajetController::class, 'store']);
     Route::get('/mes-trajets', [TrajetController::class, 'mesTrajets']);
     Route::get('/trajets/{id}/passagers', [TrajetController::class, 'listePassagers']);
 
-    // Cycle de vie
     Route::post('/trajets/{id}/demarrer', [TrajetController::class, 'demarrerTrajet']);
     Route::post('/trajets/{id}/terminer', [TrajetController::class, 'terminerTrajet']);
     Route::post('/trajets/{id}/annuler', [TrajetController::class, 'annulerTrajet']);
     Route::post('/trajets/{id}/passager-manuel', [TrajetController::class, 'ajouterPassagerManuel']);
     Route::post('/trajets/{id}/place-liberee', [TrajetController::class, 'libererPlaceManuelle']);
-
-    // Historique du parcours (conducteur/admin)
     Route::get('/trajets/{trajetId}/gps/historique', [PositionGpsController::class, 'historiquePositions']);
-    // La route GET /derniere est définie une seule fois ci-dessous
 
-    // --- RÉSERVATIONS (PASSAGER) ---
+    // Route GPS unique (suppression du doublon présent dans l'ancienne version)
+    Route::get('/trajets/{trajetId}/gps/derniere', [PositionGpsController::class, 'dernierePosition']);
+    Route::post('/trajets/{trajetId}/gps', [PositionGpsController::class, 'enregistrerPosition']);
+
+    // -------------------------------------------------------------------------
+    // RÉSERVATIONS (PASSAGER)
+    // -------------------------------------------------------------------------
     Route::post('/trajets/{id}/reserver', [ReservationController::class, 'store']);
     Route::get('/mes-reservations', [ReservationController::class, 'mesReservations']);
 
     Route::post('/reservations/{id}/accepter', [ReservationController::class, 'accepterReservation']);
     Route::post('/reservations/{id}/refuser', [ReservationController::class, 'refuserReservation']);
     Route::post('/reservations/{id}/annuler', [ReservationController::class, 'annulerReservation']);
+    Route::get('/reservations/demandes-recues', [ReservationController::class, 'demandesRecues']);
 
-    // --- ÉVALUATIONS ---
+    // -------------------------------------------------------------------------
+    // ÉVALUATIONS
+    // -------------------------------------------------------------------------
     Route::post('/chauffeurs/{id}/evaluations', [EvaluationController::class, 'store']);
+    Route::get('/mes-evaluations', [EvaluationController::class, 'mesEvaluations']);
 
-    // --- PORTEFEUILLE ---
+    // -------------------------------------------------------------------------
+    // PORTEFEUILLE
+    // -------------------------------------------------------------------------
     Route::post('/portefeuille/initier', [RechargeController::class, 'initierRecharge']);
     Route::post('/portefeuille/verifier/{token}', [RechargeController::class, 'verifierStatut']);
     Route::get('/portefeuille/historique', [RechargeController::class, 'historique']);
 
-    // --- GPS ---
-    Route::post('/trajets/{trajetId}/gps', [PositionGpsController::class, 'enregistrerPosition']);
-    Route::get('/trajets/{trajetId}/gps/derniere', [PositionGpsController::class, 'dernierePosition']);
-
-    // --- NOTIFICATIONS ---
+    // -------------------------------------------------------------------------
+    // NOTIFICATIONS
+    // -------------------------------------------------------------------------
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::post('/notifications/{id}/lire', [NotificationController::class, 'marquerCommeLue']);
     Route::post('/notifications/lire-tout', [NotificationController::class, 'marquerToutesCommeLues']);
 
-    // --- 🛡️ ZONE ADMIN ---
+    // -------------------------------------------------------------------------
+    // ZONE ADMIN
+    // -------------------------------------------------------------------------
     Route::prefix('admin')->group(function () {
         Route::get('/stats', [AdminController::class, 'getDashboardStats']);
         Route::get('/users', [AdminController::class, 'getUsers']);
