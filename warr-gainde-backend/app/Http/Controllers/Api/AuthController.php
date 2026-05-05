@@ -38,25 +38,34 @@ class AuthController extends Controller
         return response()->json([
             'success' => true,
             'user'    => $user,
-            'token'   => $token,            // ✅ uniformisé avec login()
+            'token'   => $token,
         ], 201);
     }
 
     /**
-     * CONNEXION (Login par téléphone)
+     * CONNEXION — Supporte téléphone OU email
      */
     public function login(Request $request)
     {
+        // Détecter si on se connecte par email ou téléphone
+        $parEmail = $request->filled('email') && !$request->filled('telephone');
+
         $request->validate([
-            'telephone' => 'required|string',
-            'password'  => 'required|string',
+            'password' => 'required|string',
+            'email'    => 'required_without:telephone|nullable|email',
+            'telephone'=> 'required_without:email|nullable|string',
         ]);
 
-        $telephoneNettoye = str_replace(' ', '', $request->telephone);
-
-        $user = User::where('telephone', $telephoneNettoye)
-                    ->orWhere('telephone', $request->telephone)
-                    ->first();
+        if ($parEmail) {
+            // ─── Connexion par email ───────────────────────────────────────
+            $user = User::where('email', $request->email)->first();
+        } else {
+            // ─── Connexion par téléphone ───────────────────────────────────
+            $telephoneNettoye = str_replace(' ', '', $request->telephone);
+            $user = User::where('telephone', $telephoneNettoye)
+                        ->orWhere('telephone', $request->telephone)
+                        ->first();
+        }
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             return response()->json([
@@ -117,7 +126,7 @@ class AuthController extends Controller
     public function changerMotDePasse(Request $request)
     {
         $request->validate([
-            'ancien_mot_de_passe' => 'required|string',
+            'ancien_mot_de_passe'  => 'required|string',
             'nouveau_mot_de_passe' => 'required|string|min:8|confirmed',
         ]);
 
