@@ -20,6 +20,16 @@ class RechargeController extends Controller
         $this->commissionService = $commissionService;
     }
 
+    /**
+     * Base API PayDunya : production (/api/v1) ou sandbox (/sandbox-api/v1).
+     */
+    private function paydunyaApiV1Root(): string
+    {
+        return config('services.paydunya.mode') === 'production'
+            ? 'https://app.paydunya.com/api/v1'
+            : 'https://app.paydunya.com/sandbox-api/v1';
+    }
+
     // =========================================================================
     // ÉTAPE 1 : Initier un paiement PayDunya
     // =========================================================================
@@ -42,7 +52,7 @@ class RechargeController extends Controller
             'PAYDUNYA-MASTER-KEY'  => config('services.paydunya.master_key'),
             'PAYDUNYA-PRIVATE-KEY' => config('services.paydunya.private_key'),
             'PAYDUNYA-TOKEN'       => config('services.paydunya.token'),
-        ])->post('https://app.paydunya.com/api/v1/checkout-invoice/create', [
+        ])->post($this->paydunyaApiV1Root().'/checkout-invoice/create', [
             'invoice' => [
                 'total_amount' => $request->montant,
                 'description'  => "Recharge portefeuille Warr Gaïndé — {$conducteur->prenom} {$conducteur->nom}",
@@ -121,7 +131,7 @@ class RechargeController extends Controller
             'PAYDUNYA-MASTER-KEY'  => config('services.paydunya.master_key'),
             'PAYDUNYA-PRIVATE-KEY' => config('services.paydunya.private_key'),
             'PAYDUNYA-TOKEN'       => config('services.paydunya.token'),
-        ])->get("https://app.paydunya.com/api/v1/checkout-invoice/confirm/{$token}");
+        ])->get($this->paydunyaApiV1Root()."/checkout-invoice/confirm/{$token}");
 
         if ($response->successful() && $response->json('status') === 'completed') {
             $this->validerLaRecharge($token);

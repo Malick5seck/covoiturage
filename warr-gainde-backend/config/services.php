@@ -34,10 +34,21 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
+    /*
+    | PayDunya — PAYDUNYA_MODE=sandbox utilise sandbox-api (clés de test publiques).
+    | En production : PAYDUNYA_MODE=production + clés réelles du tableau de bord.
+    */
     'paydunya' => [
-    'master_key'  => env('PAYDUNYA_MASTER_KEY'),
-    'private_key' => env('PAYDUNYA_PRIVATE_KEY'),
-    'token'       => env('PAYDUNYA_TOKEN'),
-],
+        'master_key' => env('PAYDUNYA_MASTER_KEY'),
+        'private_key' => env('PAYDUNYA_PRIVATE_KEY'),
+        'token' => env('PAYDUNYA_TOKEN'),
+        'mode' => env('PAYDUNYA_MODE', 'sandbox'),
+    ],
+
+    'twilio' => [
+        'sid' => env('TWILIO_ACCOUNT_SID'),
+        'token' => env('TWILIO_AUTH_TOKEN'),
+        'from' => env('TWILIO_FROM_NUMBER'),
+    ],
 
 ];

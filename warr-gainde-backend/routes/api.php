@@ -5,6 +5,9 @@ use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\ForgotPasswordController;
+use App\Http\Controllers\Api\PhonePasswordResetController;
+use App\Http\Controllers\Api\ResetPasswordController;
 use App\Http\Controllers\Api\VehiculeController;
 use App\Http\Controllers\Api\TrajetController;
 use App\Http\Controllers\Api\ReservationController;
@@ -23,6 +26,14 @@ use App\Http\Controllers\Api\AdminController;
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+
+Route::middleware('throttle:6,1')->group(function () {
+    Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
+    Route::post('/reset-password', [ResetPasswordController::class, 'reset']);
+    Route::post('/forgot-password-phone', [PhonePasswordResetController::class, 'forgotPhone']);
+    Route::post('/verify-otp', [PhonePasswordResetController::class, 'verifyOtp']);
+    Route::post('/reset-password-phone', [PhonePasswordResetController::class, 'resetPassword']);
+});
 Route::get('/trajets', [TrajetController::class, 'index']);
 Route::get('/chauffeurs/{conducteurId}/evaluations', [EvaluationController::class, 'indexChauffeur']);
 Route::post('/recharges/webhook', [RechargeController::class, 'webhook']);
