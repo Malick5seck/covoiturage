@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import MapTracking from '../components/MapTracking';
 import { getUser } from '../utils/auth';
+import { toast } from '../utils/toast';
+import { useConfirm } from '../context/ConfirmDialogContext.jsx';
 
 function MesTrajets() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [user] = useState(() => getUser());
 
   const [trajets, setTrajets]   = useState([]);
@@ -47,7 +50,7 @@ function MesTrajets() {
       const res = await api.get(`/trajets/${trajetId}/passagers`);
       setSelectedPassagers(res.data.data || []);
     } catch {
-      alert('Impossible de charger la liste des passagers.');
+      toast.error('Impossible de charger la liste des passagers.');
       setShowModal(false);
     } finally {
       setLoadingPassagers(false);
@@ -71,17 +74,24 @@ function MesTrajets() {
   };
 
   const handleStatusChange = async (trajetId, action) => {
-    if (action === 'terminer' && !window.confirm('Confirmez-vous l\'arrivée à destination ? La commission sera prélevée.')) return;
+    if (action === 'terminer') {
+      const ok = await confirm({
+        title: 'Arrivée à destination',
+        message: 'Confirmez-vous l\'arrivée à destination ? La commission sera prélevée.',
+        confirmLabel: 'Terminer le trajet',
+      });
+      if (!ok) return;
+    }
     try {
       const res = await api.post(`/trajets/${trajetId}/${action}`);
       if (res.data.success) {
-        alert('✅ ' + res.data.message);
+        toast.success(res.data.message || 'Mise à jour effectuée.');
         if (action === 'demarrer') trackLocation(trajetId);
         else if (action === 'terminer' && watchId !== null) { navigator.geolocation.clearWatch(watchId); setWatchId(null); }
         setTrajets(prev => prev.map(t => t.id === trajetId ? { ...t, statut: res.data.statut } : t));
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Erreur lors de la mise à jour.');
+      toast.error(err.response?.data?.message || 'Erreur lors de la mise à jour.');
     }
   };
 
@@ -93,20 +103,26 @@ function MesTrajets() {
         setTrajets(prev => prev.map(t => t.id === trajetId ? { ...t, places_disponibles: res.data.places_restantes } : t));
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Action impossible.');
+      toast.error(err.response?.data?.message || 'Action impossible.');
     }
   };
 
   const handleAnnuler = async (trajetId) => {
-    if (!window.confirm('Annuler définitivement ce trajet ? Tous les passagers seront notifiés.')) return;
+    const ok = await confirm({
+      title: 'Annuler le trajet',
+      message: 'Annuler définitivement ce trajet ? Tous les passagers seront notifiés.',
+      confirmLabel: 'Annuler le trajet',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       const res = await api.post(`/trajets/${trajetId}/annuler`);
       if (res.data.success) {
         setTrajets(prev => prev.map(t => t.id === trajetId ? { ...t, statut: 'ANNULE' } : t));
-        alert('✅ Trajet annulé.');
+        toast.success('Trajet annulé.');
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Erreur lors de l\'annulation.');
+      toast.error(err.response?.data?.message || 'Erreur lors de l\'annulation.');
     }
   };
 
@@ -280,6 +296,19 @@ function MesTrajets() {
                   )}
                 </div>
               </div>
+
+              {trajet.statut === 'EN_COURS' && (
+                <div className="px-6 pb-6 border-t border-gray-100 bg-gray-50/50">
+                  <p className="text-sm font-bold text-blue-600 mb-3 pt-4 flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+                    </span>
+                    Trajet en cours — suivi GPS (partagé avec les passagers)
+                  </p>
+                  <MapTracking trajetId={trajet.id} />
+                </div>
+              )}
             </div>
           ))}
         </div>

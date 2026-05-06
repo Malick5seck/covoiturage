@@ -20,7 +20,6 @@ function Notifications() {
     const fetchNotifications = async () => {
       try {
         const response = await api.get('/notifications');
-        // On récupère tes données exactes depuis ton contrôleur
         setNotifications(response.data.data || []);
         setNonLuesCount(response.data.non_lues_count || 0);
       } catch (err) {
@@ -33,34 +32,40 @@ function Notifications() {
     fetchNotifications();
   }, [user, navigate]);
 
-  // 2. Marquer UNE notification comme lue
   const markAsRead = async (id) => {
     try {
       await api.post(`/notifications/${id}/lire`);
-      
-      // Mise à jour locale pour que l'interface réagisse instantanément
       setNotifications(notifications.map(n => 
         n.id === id ? { ...n, date_lecture: new Date().toISOString() } : n
       ));
       setNonLuesCount(prev => Math.max(0, prev - 1));
-      
     } catch (err) {
       console.error("Erreur lors de la lecture", err);
     }
   };
 
-  // 3. Marquer TOUTES les notifications comme lues
   const markAllAsRead = async () => {
     try {
       await api.post('/notifications/lire-tout');
-      
-      // Mise à jour locale globale
       setNotifications(notifications.map(n => ({ ...n, date_lecture: new Date().toISOString() })));
       setNonLuesCount(0);
-      
     } catch (err) {
       console.error("Erreur lecture globale", err);
     }
+  };
+
+  // Mapping type → libellé lisible
+  const typeLabel = {
+    RESERVATION_RECUE:    'Nouvelle demande',
+    RESERVATION_ACCEPTEE: 'Réservation acceptée',
+    RESERVATION_REFUSEE:  'Réservation refusée',
+    RESERVATION_ANNULEE:  'Réservation annulée',
+    DEPART_IMMINENT:      'Départ imminent',
+    ARRIVEE:              'Arrivée',
+    ANNULATION:           'Trajet annulé',
+    RECHARGE_EFFECTUEE:   'Recharge confirmée',
+    PAIEMENT_VALIDE:      'Paiement validé',
+    TRAJET_PLEIN:         'Trajet complet',
   };
 
   if (loading) return <div className="text-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gainde-yellow mx-auto"></div></div>;
@@ -99,7 +104,6 @@ function Notifications() {
           {notifications.map((notif) => (
             <div 
               key={notif.id} 
-              // Le style change selon la présence de 'date_lecture'
               className={`p-6 rounded-2xl border transition-all ${
                 !notif.date_lecture ? 'bg-white border-gainde-yellow shadow-md' : 'bg-gray-50 border-gray-100 opacity-75'
               }`}
@@ -107,9 +111,9 @@ function Notifications() {
               <div className="flex justify-between items-start gap-4">
                 <div className="flex-1">
                   
-                  {/* On suppose que ta table a des colonnes 'titre' et 'message' */}
+                  {/* Titre basé sur le type de notification */}
                   <h3 className={`font-bold text-lg ${!notif.date_lecture ? 'text-gainde-dark' : 'text-gray-600'}`}>
-                    {notif.titre || 'Nouvelle notification'}
+                    {typeLabel[notif.type] || 'Notification'}
                   </h3>
                   
                   <p className="text-gray-600 mt-1">{notif.message}</p>

@@ -2,25 +2,30 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { getUser } from '../utils/auth';
+import { toast } from '../utils/toast';
+import { useConfirm } from '../context/ConfirmDialogContext.jsx';
  
 /* ═══════════════════════════════════════════════════════════════════
    SOUS-COMPOSANTS — chaque onglet est isolé pour la lisibilité
 ═══════════════════════════════════════════════════════════════════ */
  
-// ── Récapitulatif ────────────────────────────────────────────────────────────
+// ── Tableau de bord ───────────────────────────────────────────────────────────
 function SectionRecap({ stats }) {
+  const trajetsTotaux =
+    (stats?.trajets_en_cours ?? 0) + (stats?.trajets_termines ?? 0);
+
   const cards = [
     { label: 'Utilisateurs inscrits',    value: stats?.total_utilisateurs,    icon: '👥', color: 'bg-blue-50   text-blue-700'   },
     { label: 'Chauffeurs validés',        value: stats?.chauffeurs_valides,     icon: '✅', color: 'bg-green-50  text-green-700'  },
     { label: 'Chauffeurs en attente',     value: stats?.chauffeurs_en_attente,  icon: '⏳', color: 'bg-yellow-50 text-yellow-700' },
     { label: 'Trajets en cours',          value: stats?.trajets_en_cours,       icon: '🚗', color: 'bg-indigo-50 text-indigo-700' },
-    { label: 'Trajets terminés',          value: stats?.trajets_termines,       icon: '🏁', color: 'bg-gray-50   text-gray-700'   },
+    { label: 'Trajets totaux',            value: trajetsTotaux,                 icon: '📊', color: 'bg-gray-50   text-gray-700'   },
     { label: 'Revenus plateforme (FCFA)', value: parseInt(stats?.chiffre_affaires_plateforme || 0).toLocaleString('fr-FR'), icon: '💰', color: 'bg-gainde-yellow/10 text-yellow-800' },
   ];
  
   return (
     <div>
-      <h2 className="text-xl font-black text-gainde-dark mb-6">Vue globale</h2>
+      <h2 className="text-xl font-black text-gainde-dark mb-6">Tableau de bord</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {cards.map((c) => (
           <div key={c.label} className={`rounded-2xl p-6 ${c.color} border border-white shadow-sm`}>
@@ -184,8 +189,8 @@ function SectionModerateurs({ users, onBan, isSuperAdmin }) {
   );
 }
  
-// ── Commission ───────────────────────────────────────────────────────────────
-function SectionCommission({ stats, isSuperAdmin }) {
+// ── Commission & revenus (fusion : sans sous-KPI trajets dans la partie revenus) ─
+function SectionFinances({ stats, isSuperAdmin }) {
   const [taux, setTaux]   = useState('');
   const [msg, setMsg]     = useState({ type:'', text:'' });
   const [loading, setLoading] = useState(false);
@@ -205,10 +210,13 @@ function SectionCommission({ stats, isSuperAdmin }) {
     }
   };
  
+  const totalCommissions = parseInt(stats?.chiffre_affaires_plateforme || 0);
+
   return (
-    <div className="max-w-lg">
-      <h2 className="text-xl font-black text-gainde-dark mb-1">Taux de commission</h2>
-      <p className="text-gray-500 text-sm mb-6">Définissez le pourcentage prélevé sur chaque trajet.</p>
+    <div className="max-w-3xl space-y-8">
+      <div>
+      <h2 className="text-xl font-black text-gainde-dark mb-1">Commission & revenus</h2>
+      <p className="text-gray-500 text-sm mb-6">Taux appliqué aux trajets et commissions perçues par la plateforme.</p>
  
       {/* Taux actuel */}
       <div className="bg-gainde-yellow/10 border border-yellow-200 rounded-2xl p-6 mb-6 flex items-center gap-4">
@@ -254,50 +262,27 @@ function SectionCommission({ stats, isSuperAdmin }) {
           </p>
         </div>
       )}
-    </div>
-  );
-}
- 
-// ── Revenus ──────────────────────────────────────────────────────────────────
-function SectionRevenus({ stats, isSuperAdmin }) {
-  if (!isSuperAdmin) {
-    return (
-      <div>
-        <h2 className="text-xl font-black text-gainde-dark mb-4">Revenus de la plateforme</h2>
-        <div className="bg-gray-50 rounded-2xl p-10 text-center text-gray-400 font-medium border border-gray-200">
-          🔒 Accès réservé au Super Administrateur.
-        </div>
       </div>
-    );
-  }
- 
-  const total   = parseInt(stats?.chiffre_affaires_plateforme || 0);
-  const trajets = (stats?.trajets_en_cours || 0) + (stats?.trajets_termines || 0);
- 
-  const kpis = [
-    { label: 'Total commissions perçues', value: total.toLocaleString('fr-FR') + ' FCFA', icon: '💵', accent: true },
-    { label: 'Trajets terminés', value: stats?.trajets_termines ?? '—', icon: '🏁', accent: false },
-    { label: 'Trajets en cours', value: stats?.trajets_en_cours ?? '—', icon: '🚗', accent: false },
-    { label: 'Total trajets', value: trajets, icon: '📊', accent: false },
-  ];
- 
-  return (
-    <div>
-      <h2 className="text-xl font-black text-gainde-dark mb-6">Revenus de la plateforme</h2>
- 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
-        {kpis.map((k) => (
-          <div key={k.label} className={`rounded-2xl p-6 border shadow-sm ${k.accent ? 'bg-gainde-dark text-white border-gainde-dark' : 'bg-white border-gray-100'}`}>
-            <p className="text-3xl mb-2">{k.icon}</p>
-            <p className={`text-3xl font-black ${k.accent ? 'text-gainde-yellow' : 'text-gainde-dark'}`}>{k.value}</p>
-            <p className={`text-sm font-semibold mt-1 ${k.accent ? 'text-gray-300' : 'text-gray-500'}`}>{k.label}</p>
+
+      {isSuperAdmin ? (
+        <div>
+          <h3 className="text-lg font-black text-gainde-dark mb-4">Revenus de la plateforme</h3>
+          <div className="rounded-2xl p-6 border shadow-sm bg-gainde-dark text-white border-gainde-dark mb-6">
+            <p className="text-3xl mb-2">💵</p>
+            <p className="text-3xl font-black text-gainde-yellow">
+              {totalCommissions.toLocaleString('fr-FR')} <span className="text-xl text-gray-300 font-bold">FCFA</span>
+            </p>
+            <p className="text-sm font-semibold mt-1 text-gray-300">Total commissions perçues</p>
           </div>
-        ))}
-      </div>
- 
-      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 text-sm text-blue-700 font-medium">
-        ℹ️ Les revenus correspondent à la somme de toutes les commissions de type <strong>PRELEVEMENT</strong> avec statut <strong>REUSSI</strong>.
-      </div>
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-5 text-sm text-blue-700 font-medium">
+            ℹ️ Les revenus correspondent à la somme de toutes les commissions de type <strong>PRELEVEMENT</strong> avec statut <strong>REUSSI</strong>.
+          </div>
+        </div>
+      ) : (
+        <div className="bg-gray-50 rounded-2xl p-8 text-center text-gray-500 font-medium text-sm border border-gray-200">
+          🔒 Le détail des revenus (montants) est réservé au Super Administrateur.
+        </div>
+      )}
     </div>
   );
 }
@@ -374,18 +359,18 @@ function EmptyState({ icon, text }) {
 ═══════════════════════════════════════════════════════════════════ */
  
 const TABS = [
-  { id: 'recap',       label: '📊 Récapitulatif',  all: true  },
+  { id: 'dashboard',   label: '📊 Tableau de bord', all: true  },
   { id: 'passagers',   label: '🎒 Passagers',       all: true  },
   { id: 'conducteurs', label: '🚗 Conducteurs',     all: true  },
   { id: 'moderateurs', label: '👮 Modérateurs',     all: true  },
-  { id: 'commission',  label: '💰 Commission',      all: true  },
-  { id: 'revenus',     label: '📈 Revenus',         all: true  },
+  { id: 'finances',    label: '💰 Commission & revenus', all: true  },
 ];
  
 function AdminDashboard() {
   const navigate  = useNavigate();
+  const confirm   = useConfirm();
   const [user]    = useState(() => getUser());
-  const [onglet, setOnglet] = useState('recap');
+  const [onglet, setOnglet] = useState('dashboard');
  
   const [stats,     setStats]     = useState(null);
   const [usersList, setUsersList] = useState([]);
@@ -417,12 +402,19 @@ function AdminDashboard() {
  
   // ── Actions globales ────────────────────────────────────────────────────────
   const handleBan = async (id) => {
-    if (!window.confirm('Bannir définitivement cet utilisateur ?')) return;
+    const ok = await confirm({
+      title: 'Bannir l’utilisateur',
+      message: 'Bannir définitivement cet utilisateur ?',
+      confirmLabel: 'Bannir',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       await api.delete(`/admin/users/${id}`);
       setUsersList(prev => prev.filter(u => u.id !== id));
+      toast.success('Utilisateur retiré de la plateforme.');
     } catch (err) {
-      alert(err.response?.data?.message || 'Erreur lors du bannissement.');
+      toast.error(err.response?.data?.message || 'Erreur lors du bannissement.');
     }
   };
  
@@ -430,8 +422,9 @@ function AdminDashboard() {
     try {
       await api.post(`/admin/chauffeurs/${id}/statut`, { nouveau_statut: nouveauStatut });
       setUsersList(prev => prev.map(u => u.id === id ? { ...u, statut_verification: nouveauStatut } : u));
+      toast.success('Statut du chauffeur mis à jour.');
     } catch (err) {
-      alert(err.response?.data?.message || 'Erreur.');
+      toast.error(err.response?.data?.message || 'Erreur.');
     }
   };
  
@@ -483,12 +476,11 @@ function AdminDashboard() {
  
       {/* CONTENU DE L'ONGLET ACTIF */}
       <div className="min-h-[400px]">
-        {onglet === 'recap'       && <SectionRecap stats={stats} />}
+        {onglet === 'dashboard'   && <SectionRecap stats={stats} />}
         {onglet === 'passagers'   && <SectionPassagers users={usersList} onBan={handleBan} />}
         {onglet === 'conducteurs' && <SectionConducteurs users={usersList} onBan={handleBan} onChangeStatut={handleChangeStatut} />}
         {onglet === 'moderateurs' && <SectionModerateurs users={usersList} onBan={handleBan} isSuperAdmin={isSuperAdmin} />}
-        {onglet === 'commission'  && <SectionCommission stats={stats} isSuperAdmin={isSuperAdmin} />}
-        {onglet === 'revenus'     && <SectionRevenus stats={stats} isSuperAdmin={isSuperAdmin} />}
+        {onglet === 'finances'    && <SectionFinances stats={stats} isSuperAdmin={isSuperAdmin} />}
       </div>
     </div>
   );

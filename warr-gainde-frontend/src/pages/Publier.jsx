@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import api from "../api/axios";
+import { toast } from "../utils/toast";
 
 // 1. IMPORTS LEAFLET
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
@@ -83,7 +84,7 @@ function Publier() {
   // --- RÉCUPÉRATION DE LA POSITION & AFFICHAGE DE LA CARTE ---
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
-      alert("La géolocalisation n'est pas supportée par votre navigateur.");
+      toast.warning("La géolocalisation n'est pas supportée par votre navigateur.");
       return;
     }
 
@@ -110,8 +111,8 @@ function Publier() {
       (error) => {
         console.error("Erreur GPS:", error);
         setFormData({ ...formData, point_embarquement: "" });
-        alert(
-          "Impossible de récupérer votre position. Veuillez vérifier vos permissions GPS.",
+        toast.error(
+          "Impossible de récupérer votre position. Vérifiez les permissions GPS.",
         );
       },
       { enableHighAccuracy: true }, // Demande plus de précision
@@ -119,12 +120,12 @@ function Publier() {
   };
 
   const handleSubmit = async (e) => {
-    // ... (Ton code handleSubmit reste exactement le même)
     e.preventDefault();
     setLoading(true);
     setError("");
     setSuccess(false);
 
+    // Vérification du solde (doublée par le backend)
     if (soldeActuel < commissionEstimee) {
       setError(`Solde insuffisant...`);
       setLoading(false);
@@ -151,16 +152,85 @@ function Publier() {
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        {/* ... (En-tête, alertes d'erreur et véhicules comme avant) ... */}
+        {/* En-tête */}
+        <div className="text-center mb-10">
+          <h1 className="text-3xl font-extrabold text-gainde-dark">
+            Publier un trajet
+          </h1>
+          <p className="text-gray-500 mt-2">
+            Où allez-vous conduire aujourd'hui ?
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border-l-4 border-gainde-red text-gainde-red font-medium">
+            {error}
+          </div>
+        )}
+
+        {success && (
+          <div className="mb-6 p-4 bg-green-50 border-l-4 border-gainde-green text-gainde-green font-medium">
+            ✅ Trajet publié avec succès ! Redirection en cours...
+          </div>
+        )}
+
+        {/* ALERTE SI AUCUN VÉHICULE N'EST ENREGISTRÉ */}
+        {mesVehicules.length === 0 && !loading && (
+          <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-gainde-yellow text-yellow-800 font-medium flex justify-between items-center">
+            <span>
+              ⚠️ Vous devez enregistrer un véhicule avant de publier un trajet.
+            </span>
+            <button
+              onClick={() => navigate("/mon-vehicule")}
+              className="bg-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm"
+            >
+              Ajouter un véhicule
+            </button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* ITINÉRAIRE */}
           <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
             <h3 className="font-bold text-gainde-dark mb-4 border-b pb-2">
               📍 Itinéraire et Lieu de rencontre
             </h3>
 
-            {/* ... (Inputs Villes départ/arrivée) ... */}
+            {/* Villes départ / arrivée */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Ville de départ
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Dakar"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  value={formData.ville_depart}
+                  onChange={(e) =>
+                    setFormData({ ...formData, ville_depart: e.target.value })
+                  }
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Ville d'arrivée
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ex: Thiès"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  value={formData.ville_arrivee}
+                  onChange={(e) =>
+                    setFormData({ ...formData, ville_arrivee: e.target.value })
+                  }
+                />
+              </div>
+            </div>
 
+            {/* Point d'embarquement */}
             <div className="w-full mt-4">
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Point d'embarquement exact
@@ -188,7 +258,7 @@ function Publier() {
                 </button>
               </div>
 
-              {/* NOUVEAU : AFFICHAGE DE LA CARTE SI ON A LES COORDONNÉES */}
+              {/* AFFICHAGE DE LA CARTE */}
               {mapPosition && (
                 <div className="mt-4 h-64 w-full rounded-xl overflow-hidden border border-gray-300 shadow-inner z-0 relative">
                   <MapContainer
@@ -208,6 +278,7 @@ function Publier() {
               )}
             </div>
           </div>
+
           {/* DATES ET HEURES */}
           <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
             <h3 className="font-bold text-gainde-dark mb-4 border-b pb-2">

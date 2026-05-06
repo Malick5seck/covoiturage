@@ -1,5 +1,6 @@
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "./utils/toast";
 import Navbar from "./components/Navbar";
 
 // Pages auth
@@ -34,6 +35,27 @@ import AdminDashboard from "./pages/AdminDashboard";
 function App() {
   return (
     <BrowserRouter>
+      <Toaster
+        position="bottom-center"
+        gutter={10}
+        toastOptions={{
+          duration: 4000,
+          style: {
+            borderRadius: "1rem",
+            padding: "12px 16px",
+            maxWidth: "min(100vw - 2rem, 28rem)",
+            fontSize: "0.925rem",
+          },
+          success: {
+            style: { background: "#f0fdf4", color: "#14532d" },
+            iconTheme: { primary: "#16a34a", secondary: "#fff" },
+          },
+          error: {
+            style: { background: "#fef2f2", color: "#991b1b" },
+            iconTheme: { primary: "#dc2626", secondary: "#fff" },
+          },
+        }}
+      />
       <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

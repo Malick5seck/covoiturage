@@ -219,81 +219,85 @@ class TrajetController extends Controller
     // =========================================================================
 
     public function terminerTrajet(Request $request, $id)
-{
-    $trajet = Trajet::findOrFail($id);
+    {
+        $trajet = Trajet::findOrFail($id);
 
-    // ... vérifications d'accès et de statut ...
-
-    return DB::transaction(function () use ($trajet) {
-
-        // 1. Mettre à jour le statut et l'heure d'arrivée
-        $trajet->update([
-            'statut'               => 'TERMINE',
-            'heure_arrivee_reelle' => now(),
-        ]);
-
-        // 2. Archiver les positions GPS (la colonne statut_trajet existe bien)
-        PositionGps::archiverPourTrajet($trajet->id);
-
-        // 3. Passagers acceptés à notifier
-        $passagersAcceptes = Reservation::where('trajet_id', $trajet->id)
-                                        ->where('statut', 'ACCEPTEE')
-                                        ->pluck('passager_id');
-
-        // 4. Places occupées
-        $placesOccupees = $trajet->nombre_places_totales - $trajet->places_disponibles;
-
-        if ($placesOccupees <= 0) {
-            return response()->json([
-                'success'             => true,
-                'message'             => 'Trajet terminé. Aucune commission prélevée (aucun passager).',
-                'statut'              => 'TERMINE',
-                'commission_prelevee' => 0,
-            ], 200);
+        if ($trajet->conducteur_id !== $request->user()->id) {
+            return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
         }
 
-        // 5. Calculer la commission
-        $commission = $this->commissionService->calculer(
-            $trajet->prix_par_place,
-            $placesOccupees,
-            $trajet->taux_commission_applique
-        );
-
-        // 6. Prélèvement SÉCURISÉ
-        try {
-            $nouveauSolde = $this->commissionService->prelever(
-                $trajet->conducteur_id,
-                $trajet->id,
-                $commission
-            );
-        } catch (\Exception $e) {
-            // Le solde est insuffisant, on empêche la terminaison propre
+        if ($trajet->statut !== 'EN_COURS') {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
-            ], 402); // 402 Payment Required
+                'message' => 'Ce trajet ne peut pas être terminé (statut : '.$trajet->statut.').',
+            ], 400);
         }
 
-        // 7. Notifications aux passagers acceptés
-        foreach ($passagersAcceptes as $passagerId) {
-            NotificationController::creer(
-                $passagerId,
-                'ARRIVEE',
-                "🏁 Vous êtes arrivé à destination ! Votre trajet {$trajet->ville_depart} → {$trajet->ville_arrivee} est terminé. N'oubliez pas d'évaluer votre conducteur."
-            );
-        }
+        // CORRECTION : utiliser le compteur cumulatif pour la commission
+        $placesOccupees = (int) $trajet->total_passagers_cumules;
 
-        return response()->json([
-            'success'             => true,
-            'message'             => "Trajet terminé ! Commission de {$commission} FCFA prélevée (taux : {$trajet->taux_commission_applique}%).",
-            'statut'              => 'TERMINE',
-            'commission_prelevee' => $commission,
-            'nouveau_solde'       => $nouveauSolde,
-            'places_occupees'     => $placesOccupees,
-            'passagers_notifies'  => $passagersAcceptes->count(),
-        ], 200);
-    });
-}
+        try {
+            return DB::transaction(function () use ($trajet, $placesOccupees) {
+                $trajet->update([
+                    'statut'               => 'TERMINE',
+                    'heure_arrivee_reelle' => now(),
+                ]);
+
+                PositionGps::where('trajet_id', $trajet->id)->delete();
+
+                $passagersAcceptes = Reservation::where('trajet_id', $trajet->id)
+                    ->where('statut', 'ACCEPTEE')
+                    ->pluck('passager_id');
+
+                if ($placesOccupees <= 0) {
+                    return response()->json([
+                        'success'             => true,
+                        'message'             => 'Trajet terminé. Aucune commission prélevée (aucun passager).',
+                        'statut'              => 'TERMINE',
+                        'commission_prelevee' => 0,
+                    ], 200);
+                }
+
+                $commission = $this->commissionService->calculer(
+                    $trajet->prix_par_place,
+                    $placesOccupees,
+                    $trajet->taux_commission_applique
+                );
+
+                $nouveauSolde = $this->commissionService->prelever(
+                    $trajet->conducteur_id,
+                    $trajet->id,
+                    $commission
+                );
+
+                foreach ($passagersAcceptes as $passagerId) {
+                    NotificationController::creer(
+                        $passagerId,
+                        'ARRIVEE',
+                        "🏁 Vous êtes arrivé à destination ! Votre trajet {$trajet->ville_depart} → {$trajet->ville_arrivee} est terminé. N'oubliez pas d'évaluer votre conducteur."
+                    );
+                }
+
+                return response()->json([
+                    'success'             => true,
+                    'message'             => "Trajet terminé ! Commission de {$commission} FCFA prélevée (taux : {$trajet->taux_commission_applique}%).",
+                    'statut'              => 'TERMINE',
+                    'commission_prelevee' => $commission,
+                    'nouveau_solde'       => $nouveauSolde,
+                    'places_occupees'     => $placesOccupees,
+                    'passagers_notifies'  => $passagersAcceptes->count(),
+                ], 200);
+            });
+        } catch (\Exception $e) {
+            $message = $e->getMessage();
+            $status  = str_contains($message, 'Solde insuffisant') ? 402 : 500;
+
+            return response()->json([
+                'success' => false,
+                'message' => $message,
+            ], $status);
+        }
+    }
     // =========================================================================
     // ANNULER — Cascade réservations + Notifie tous les passagers concernés
     // =========================================================================
@@ -323,6 +327,8 @@ class TrajetController extends Controller
 
             // 2. Passer le trajet en ANNULE
             $trajet->update(['statut' => 'ANNULE']);
+
+            PositionGps::where('trajet_id', $trajet->id)->delete();
 
             // 3. Annulation en cascade de toutes les réservations actives
             $trajet->reservations()
@@ -396,6 +402,8 @@ class TrajetController extends Controller
         }
 
         $trajet->decrement('places_disponibles', $request->nombre_places);
+        // INCIDENTER LE COMPTEUR CUMULATIF POUR LA COMMISSION
+        $trajet->increment('total_passagers_cumules', $request->nombre_places);
 
         return response()->json([
             'success'          => true,
@@ -422,6 +430,7 @@ class TrajetController extends Controller
             ], 400);
         }
 
+        // On ne décrémente PAS total_passagers_cumules : le passager descend, mais il a bien été transporté
         $trajet->increment('places_disponibles', $request->nombre_places);
 
         return response()->json([

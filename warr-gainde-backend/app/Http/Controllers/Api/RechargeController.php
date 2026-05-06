@@ -5,7 +5,8 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Api\NotificationController;
 use App\Models\Recharge;
-use App\Services\CommissionService; // Import du service
+use App\Models\User;
+use App\Services\CommissionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -70,9 +71,13 @@ class RechargeController extends Controller
             ],
         ]);
 
-        if (!$response->successful() || $response->json('response_code') !== '00') {
-            return response()->json(['success' => false, 'message' => 'Erreur lors de l\'initiation PayDunya.'], 500);
-        }
+      if (!$response->successful() || $response->json('response_code') !== '00') {
+    return response()->json([
+        'success' => false,
+        'message' => 'PayDunya : ' . ($response->json('response_text') ?? $response->body()),
+        'code'    => $response->json('response_code'),
+    ], 500);
+}
 
         $token = $response->json('token');
 
@@ -85,9 +90,14 @@ class RechargeController extends Controller
             'transaction_id'   => $token,
         ]);
 
+        // Construire l'URL de paiement adaptée au mode
+        $basePaymentUrl = config('services.paydunya.mode') === 'production'
+            ? 'https://app.paydunya.com/pay/'
+            : 'https://app.paydunya.com/sandbox-pay/';
+
         return response()->json([
             'success'     => true,
-            'payment_url' => $response->json('response_text'),
+            'payment_url' => $basePaymentUrl . $token,
             'token'       => $token,
         ], 200);
     }
@@ -154,10 +164,15 @@ class RechargeController extends Controller
 
         if ($recharge) {
             DB::transaction(function () use ($recharge) {
-                // UTILISATION DU SERVICE : Centralise l'incrément et le log final
-                $this->commissionService->recharger($recharge->conducteur_id, $recharge->montant);
-                
-                // On met à jour l'enregistrement PayDunya initial pour dire qu'il est fini
+                // Verrouiller l'utilisateur pour éviter toute modification concurrente
+                $conducteur = User::where('id', $recharge->conducteur_id)
+                                  ->lockForUpdate()
+                                  ->firstOrFail();
+
+                // Créditer le solde (sans créer une nouvelle ligne)
+                $conducteur->increment('solde_portefeuille', $recharge->montant);
+
+                // Marquer la recharge PayDunya comme réussie
                 $recharge->update(['statut' => 'REUSSI']);
             });
 
@@ -216,7 +231,4 @@ class RechargeController extends Controller
             ],
         ], 200);
     }
-
-
-
 }

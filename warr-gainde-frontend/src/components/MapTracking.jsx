@@ -44,7 +44,7 @@ function MapTracking({ trajetId }) {
       .then(res => {
         if (res.data.success) {
           setPosition([res.data.data.lat, res.data.data.lng]);
-          setLastUpdate(res.data.data.updated_at);
+          setLastUpdate(res.data.data.date_position || res.data.data.updated_at);
         }
       })
       .catch(() => {})
@@ -68,9 +68,7 @@ function MapTracking({ trajetId }) {
 
     // 3. Nettoyage à la destruction du composant
     return () => {
-      if (channelRef.current) {
-        echo.leaveChannel(`trajet.${trajetId}`);
-      }
+      echo.leave(`trajet.${trajetId}`);
     };
   }, [trajetId]);
 

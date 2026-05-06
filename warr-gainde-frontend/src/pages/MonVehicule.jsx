@@ -27,8 +27,12 @@ const [user] = useState(() => getUser());
   const [message, setMessage] = useState({ type: '', text: '' });
 
   useEffect(() => {
-    if (!user || user.role_actuel !== 'CHAUFFEUR') {
-      navigate('/dashboard');
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    if (user.role_actuel !== 'CHAUFFEUR') {
+      navigate('/');
       return;
     }
 

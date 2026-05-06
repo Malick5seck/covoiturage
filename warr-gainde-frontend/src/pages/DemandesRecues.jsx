@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { getUser } from '../utils/auth';
+import { toast } from '../utils/toast';
 
 function DemandesRecues() {
   const navigate = useNavigate();
@@ -32,21 +33,15 @@ function DemandesRecues() {
     try {
       const res = await api.post(`/reservations/${reservationId}/${action}`);
       if (res.data.success) {
-        // Retirer la demande traitée de la liste
         setDemandes(prev => prev.filter(d => d.id !== reservationId));
-        const msg = action === 'accepter' ? '✅ Réservation acceptée !' : '❌ Réservation refusée.';
-        // Toast discret plutôt qu'alert
-        const banner = document.getElementById('action-banner');
-        if (banner) {
-          banner.textContent = msg;
-          banner.className = `fixed top-20 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl font-bold shadow-xl text-sm transition-all ${
-            action === 'accepter' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-          }`;
-          setTimeout(() => { banner.className = 'hidden'; }, 3000);
+        if (action === 'accepter') {
+          toast.success('Réservation acceptée.');
+        } else {
+          toast.info('Réservation refusée.');
         }
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Erreur lors de l\'action.');
+      toast.error(err.response?.data?.message || 'Erreur lors de l\'action.');
     }
   };
 
@@ -58,9 +53,6 @@ function DemandesRecues() {
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
-
-      {/* BANNER ACTION */}
-      <div id="action-banner" className="hidden"/>
 
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getUser, getToken, logout as authLogout } from '../utils/auth';
+import { useNotificationsTempsReel } from '../hooks/UseNotificationsTempsReel';
+import NotificationToast from './NotificationToast';
 
 function Navbar() {
   const navigate   = useNavigate();
@@ -9,6 +11,7 @@ function Navbar() {
 
   const token = getToken();
   const user  = getUser();
+  const { nouvelleNotif } = useNotificationsTempsReel();
 
   const isChauffeur = user?.role_actuel === 'CHAUFFEUR';
   const isPassager  = user?.role_actuel === 'PASSAGER';
@@ -25,6 +28,8 @@ function Navbar() {
       : 'text-gray-500 hover:text-gainde-dark hover:bg-gray-50';
 
   return (
+    <>
+    <NotificationToast notification={nouvelleNotif} onClose={() => {}} />
     <nav className="bg-white border-b border-gray-100 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20">
@@ -190,6 +195,7 @@ function Navbar() {
         )}
       </div>
     </nav>
+    </>
   );
 }
 

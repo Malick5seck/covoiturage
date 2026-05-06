@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
+import { toast } from '../utils/toast';
 
 function Recherche() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -19,6 +20,22 @@ function Recherche() {
   const [trajets, setTrajets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // États pour la modale de réservation avancée
+  const [showResaModal, setShowResaModal] = useState(false);
+  const [selectedTrajet, setSelectedTrajet] = useState(null);
+  const [resaForm, setResaForm] = useState({
+    nombre_places: 1,
+    type_reservation: 'CLASSIQUE',
+    est_pour_un_tiers: false,
+    nom_passager_tiers: '',
+    tel_passager_tiers: '',
+    est_privatisee: false,
+    point_embarquement_nom: '',
+    point_embarquement_lat: '',
+    point_embarquement_long: '',
+  });
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchTrajets = async () => {
@@ -44,46 +61,125 @@ function Recherche() {
   };
 
   const handleAjoutManuel = async (trajetId, placesDispo) => {
-    if (placesDispo <= 0) return alert("Le véhicule est déjà plein !");
+    if (placesDispo <= 0) {
+      toast.warning('Le véhicule est déjà plein.');
+      return;
+    }
     try {
       const response = await api.post(`/trajets/${trajetId}/passager-manuel`, { nombre_places: 1 });
       if (response.data.success) {
         setTrajets(trajets.map(t => t.id === trajetId ? { ...t, places_disponibles: t.places_disponibles - 1 } : t));
       }
     } catch (err) {
-      alert(err.response?.data?.message || "Erreur lors de l'ajout manuel.");
+      toast.error(err.response?.data?.message || "Erreur lors de l'ajout manuel.");
     }
   };
 
   const handleLiberePlace = async (trajetId, placesDispo, placesMax) => {
-    if (placesDispo >= placesMax) return alert("Toutes les places sont déjà libres !");
+    if (placesDispo >= placesMax) {
+      toast.warning('Toutes les places sont déjà libres.');
+      return;
+    }
     try {
       const response = await api.post(`/trajets/${trajetId}/place-liberee`, { nombre_places: 1 });
       if (response.data.success) {
         setTrajets(trajets.map(t => t.id === trajetId ? { ...t, places_disponibles: t.places_disponibles + 1 } : t));
       }
     } catch (err) {
-      alert(err.response?.data?.message || "Erreur lors de la libération de la place.");
+      toast.error(err.response?.data?.message || "Erreur lors de la libération de la place.");
     }
   };
 
-  const handleReservation = async (trajetId) => {
+  // Ouvre la modale de réservation avancée
+  const handleOpenReservation = (trajet) => {
     if (!user) {
-      alert("Vous devez être connecté pour réserver un trajet.");
+      toast.info('Connectez-vous pour réserver un trajet.');
       return;
     }
+    setSelectedTrajet(trajet);
+    setResaForm({
+      nombre_places: 1,
+      type_reservation: 'CLASSIQUE',
+      est_pour_un_tiers: false,
+      nom_passager_tiers: '',
+      tel_passager_tiers: '',
+      est_privatisee: false,
+      point_embarquement_nom: '',
+      point_embarquement_lat: '',
+      point_embarquement_long: '',
+    });
+    setShowResaModal(true);
+  };
+
+  // Fermer la modale
+  const closeResaModal = () => {
+    setShowResaModal(false);
+    setSelectedTrajet(null);
+  };
+
+  // Gestion des changements dans le formulaire
+  const handleResaChange = (field, value) => {
+    setResaForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Bouton GPS pour le point d'embarquement
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      toast.warning("La géolocalisation n'est pas supportée.");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        handleResaChange('point_embarquement_lat', pos.coords.latitude.toString());
+        handleResaChange('point_embarquement_long', pos.coords.longitude.toString());
+        handleResaChange('point_embarquement_nom', `Position GPS (${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)})`);
+        toast.success('Position GPS capturée.');
+      },
+      (err) => {
+        toast.error('Impossible de récupérer la position. Vérifiez les permissions GPS.');
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  // Soumission de la réservation
+  const handleReservationSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedTrajet) return;
+
+    const places = resaForm.est_privatisee ? selectedTrajet.places_disponibles : resaForm.nombre_places;
+    if (places < 1 || places > selectedTrajet.places_disponibles) {
+      toast.error('Nombre de places invalide.');
+      return;
+    }
+
+    const payload = {
+      trajet_id: selectedTrajet.id,
+      nombre_places: places,
+      type_reservation: resaForm.type_reservation,
+      est_pour_un_tiers: resaForm.est_pour_un_tiers,
+      nom_passager_tiers: resaForm.est_pour_un_tiers ? resaForm.nom_passager_tiers : undefined,
+      tel_passager_tiers: resaForm.est_pour_un_tiers ? resaForm.tel_passager_tiers : undefined,
+      est_privatisee: resaForm.est_privatisee,
+      point_embarquement_nom: resaForm.point_embarquement_nom || undefined,
+      point_embarquement_lat: resaForm.point_embarquement_lat || undefined,
+      point_embarquement_long: resaForm.point_embarquement_long || undefined,
+    };
+
+    setSubmitting(true);
     try {
-      const response = await api.post(`/trajets/${trajetId}/reserver`, {
-        nombre_places: 1,
-        type_reservation: 'CLASSIQUE'
-      });
-      
+      const response = await api.post(`/trajets/${selectedTrajet.id}/reserver`, payload);
       if (response.data.success) {
-        alert("🎉 " + response.data.message);
-        setTrajets(trajets.map(t => t.id === trajetId ? { ...t, places_disponibles: t.places_disponibles - 1 } : t));
+        toast.success(response.data.message || 'Réservation enregistrée.');
+        setTrajets(trajets.map(t => 
+          t.id === selectedTrajet.id ? { ...t, places_disponibles: t.places_disponibles - places } : t
+        ));
+        closeResaModal();
       }
     } catch (err) {
-      alert(err.response?.data?.message || "Erreur lors de la réservation.");
+      toast.error(err.response?.data?.message || "Erreur lors de la réservation.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -231,7 +327,7 @@ function Recherche() {
                   </div>
                 ) : (
                   <button 
-                    onClick={() => handleReservation(trajet.id)}
+                    onClick={() => handleOpenReservation(trajet)}
                     disabled={trajet.places_disponibles <= 0}
                     className="bg-gainde-dark text-white px-6 py-2.5 rounded-xl font-bold mt-3 hover:bg-black transition disabled:bg-gray-300 disabled:cursor-not-allowed shadow-md w-full md:w-auto"
                   >
@@ -241,6 +337,137 @@ function Recherche() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* MODALE DE RÉSERVATION AVANCÉE */}
+      {showResaModal && selectedTrajet && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button onClick={closeResaModal} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+            <h2 className="text-2xl font-bold text-gainde-dark mb-2">Réserver une place</h2>
+            <p className="text-sm text-gray-500 mb-6">
+              {selectedTrajet.ville_depart} → {selectedTrajet.ville_arrivee} • {selectedTrajet.prix_par_place} FCFA / place
+            </p>
+
+            <form onSubmit={handleReservationSubmit} className="space-y-4">
+              {/* Nombre de places (sauf si privatisé) */}
+              {!resaForm.est_privatisee && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Nombre de places</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={selectedTrajet.places_disponibles}
+                    required
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                    value={resaForm.nombre_places}
+                    onChange={(e) => handleResaChange('nombre_places', parseInt(e.target.value) || 1)}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">{selectedTrajet.places_disponibles} place(s) disponible(s)</p>
+                </div>
+              )}
+
+              {/* Type de réservation */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Type</label>
+                <select
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none bg-white"
+                  value={resaForm.type_reservation}
+                  onChange={(e) => handleResaChange('type_reservation', e.target.value)}
+                >
+                  <option value="CLASSIQUE">Classique (avant départ)</option>
+                  <option value="EN_ROUTE">En route (point d'embarquement)</option>
+                </select>
+              </div>
+
+              {/* Point d'embarquement */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Point d'embarquement</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Nom du lieu ou adresse"
+                    className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                    value={resaForm.point_embarquement_nom}
+                    onChange={(e) => handleResaChange('point_embarquement_nom', e.target.value)}
+                  />
+                  <button type="button" onClick={handleGetLocation} className="bg-gray-200 px-3 py-3 rounded-xl text-sm font-semibold hover:bg-gray-300">
+                    📍 GPS
+                  </button>
+                </div>
+                {(resaForm.point_embarquement_lat || resaForm.point_embarquement_long) && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Lat: {resaForm.point_embarquement_lat?.substring(0,8)} Lng: {resaForm.point_embarquement_long?.substring(0,8)}
+                  </p>
+                )}
+              </div>
+
+              {/* Options supplémentaires */}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={resaForm.est_pour_un_tiers}
+                    onChange={(e) => handleResaChange('est_pour_un_tiers', e.target.checked)}
+                  />
+                  <span className="text-sm font-semibold text-gray-700">Réserver pour un tiers</span>
+                </label>
+
+                {resaForm.est_pour_un_tiers && (
+                  <div className="grid grid-cols-2 gap-2 ml-4">
+                    <input
+                      type="text"
+                      required
+                      placeholder="Nom du passager"
+                      className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-gainde-yellow"
+                      value={resaForm.nom_passager_tiers}
+                      onChange={(e) => handleResaChange('nom_passager_tiers', e.target.value)}
+                    />
+                    <input
+                      type="tel"
+                      required
+                      placeholder="Téléphone"
+                      className="px-3 py-2 rounded-lg border border-gray-200 text-sm outline-none focus:border-gainde-yellow"
+                      value={resaForm.tel_passager_tiers}
+                      onChange={(e) => handleResaChange('tel_passager_tiers', e.target.value)}
+                    />
+                  </div>
+                )}
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={resaForm.est_privatisee}
+                    onChange={(e) => {
+                      const privatise = e.target.checked;
+                      handleResaChange('est_privatisee', privatise);
+                      if (privatise) {
+                        handleResaChange('nombre_places', selectedTrajet.places_disponibles);
+                      }
+                    }}
+                  />
+                  <span className="text-sm font-semibold text-gray-700">Privatiser le véhicule ({selectedTrajet.places_disponibles} place(s) restante(s))</span>
+                </label>
+              </div>
+
+              {/* Récapitulatif */}
+              <div className="bg-gray-50 rounded-xl p-4 text-sm">
+                <p className="font-bold text-gainde-dark">
+                  Total estimé : {(selectedTrajet.prix_par_place * (resaForm.est_privatisee ? selectedTrajet.places_disponibles : resaForm.nombre_places)).toLocaleString('fr-FR')} FCFA
+                </p>
+                <p className="text-gray-500 text-xs mt-1">Paiement à effectuer au chauffeur à l'embarquement.</p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full bg-gainde-dark text-white py-3 rounded-xl font-bold hover:bg-black transition disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {submitting ? 'Réservation...' : 'Confirmer la réservation'}
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </div>

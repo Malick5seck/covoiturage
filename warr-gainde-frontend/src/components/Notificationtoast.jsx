@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getNotifMeta } from '../hooks/useNotificationsTempsReel';
+import { getNotifMeta } from '../hooks/UseNotificationsTempsReel';
 
 /**
  * Toast de notification temps réel.

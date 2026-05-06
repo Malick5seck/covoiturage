@@ -15,7 +15,7 @@ class Trajet extends Model
         'latitude_actuelle', 'longitude_actuelle', 'distance_km',
         'date_heure_depart', 'heure_depart_reelle', 'heure_arrivee_reelle',
         'prix_par_place', 'nombre_places_totales', 'places_disponibles',
-        'statut', 'taux_commission_applique'
+        'statut', 'taux_commission_applique','total_passagers_cumules'
     ];
 
     protected $casts = [

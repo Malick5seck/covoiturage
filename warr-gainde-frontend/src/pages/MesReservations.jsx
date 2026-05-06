@@ -3,9 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import MapTracking from '../components/MapTracking';
 import { getUser } from '../utils/auth';
+import { toast } from '../utils/toast';
+import { useConfirm } from '../context/ConfirmDialogContext.jsx';
 
 function MesReservations() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   const [user] = useState(() => getUser());
 
   const [reservations, setReservations] = useState([]);
@@ -36,14 +39,21 @@ function MesReservations() {
 
   // ── Annuler une réservation ───────────────────────────────────────────────
   const handleAnnuler = async (id) => {
-    if (!window.confirm('Confirmer l\'annulation de cette réservation ?')) return;
+    const ok = await confirm({
+      title: 'Annuler la réservation',
+      message: 'Confirmer l\'annulation de cette réservation ?',
+      confirmLabel: 'Annuler la réservation',
+      danger: true,
+    });
+    if (!ok) return;
     try {
       const res = await api.post(`/reservations/${id}/annuler`);
       if (res.data.success) {
         setReservations(prev => prev.map(r => r.id === id ? { ...r, statut: 'ANNULEE' } : r));
+        toast.success('Réservation annulée.');
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Erreur lors de l\'annulation.');
+      toast.error(err.response?.data?.message || 'Erreur lors de l\'annulation.');
     }
   };
 
@@ -54,12 +64,12 @@ function MesReservations() {
     try {
       const res = await api.post(`/trajets/${reviewTrajetId}/evaluations`, reviewData);
       if (res.data.success) {
-        alert('🎉 ' + res.data.message);
+        toast.success(res.data.message || 'Merci pour votre avis !');
         setShowReviewModal(false);
         setReviewData({ note: 5, commentaire: '' });
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Erreur lors de l\'envoi.');
+      toast.error(err.response?.data?.message || 'Erreur lors de l\'envoi.');
     } finally {
       setSubmittingReview(false);
     }
