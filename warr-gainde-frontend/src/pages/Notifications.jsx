@@ -54,7 +54,6 @@ function Notifications() {
     }
   };
 
-  // Mapping type → libellé lisible
   const typeLabel = {
     RESERVATION_RECUE:    'Nouvelle demande',
     RESERVATION_ACCEPTEE: 'Réservation acceptée',
@@ -68,7 +67,11 @@ function Notifications() {
     TRAJET_PLEIN:         'Trajet complet',
   };
 
-  if (loading) return <div className="text-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gainde-yellow mx-auto"></div></div>;
+  if (loading) return (
+    <div className="text-center py-20">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gainde-yellow mx-auto"></div>
+    </div>
+  );
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
@@ -103,15 +106,21 @@ function Notifications() {
         <div className="grid gap-4">
           {notifications.map((notif) => (
             <div 
-              key={notif.id} 
-              className={`p-6 rounded-2xl border transition-all ${
-                !notif.date_lecture ? 'bg-white border-gainde-yellow shadow-md' : 'bg-gray-50 border-gray-100 opacity-75'
+              key={notif.id}
+              onClick={() => {
+                if (!notif.date_lecture) {
+                  markAsRead(notif.id);
+                }
+              }}
+              className={`p-6 rounded-2xl border transition-all cursor-pointer ${
+                !notif.date_lecture 
+                  ? 'bg-white border-gainde-yellow shadow-md hover:shadow-lg' 
+                  : 'bg-gray-50 border-gray-100 opacity-75'
               }`}
             >
               <div className="flex justify-between items-start gap-4">
                 <div className="flex-1">
                   
-                  {/* Titre basé sur le type de notification */}
                   <h3 className={`font-bold text-lg ${!notif.date_lecture ? 'text-gainde-dark' : 'text-gray-600'}`}>
                     {typeLabel[notif.type] || 'Notification'}
                   </h3>
@@ -124,15 +133,7 @@ function Notifications() {
                     })}
                   </p>
                 </div>
-                
-                {/* BOUTON MARQUER COMME LU */}
-                {!notif.date_lecture && (
-                  <button 
-                    onClick={() => markAsRead(notif.id)}
-                    className="w-4 h-4 bg-gainde-yellow rounded-full flex-shrink-0 animate-pulse hover:scale-125 transition-transform cursor-pointer"
-                    title="Marquer comme lu"
-                  ></button>
-                )}
+                {/* Plus de bouton point jaune */}
               </div>
             </div>
           ))}

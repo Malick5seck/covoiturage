@@ -4,11 +4,9 @@ import api from '../api/axios';
 import MapTracking from '../components/MapTracking';
 import { getUser } from '../utils/auth';
 import { toast } from '../utils/toast';
-import { useConfirm } from '../context/ConfirmDialogContext.jsx';
 
 function MesReservations() {
   const navigate = useNavigate();
-  const confirm = useConfirm();
   const [user] = useState(() => getUser());
 
   const [reservations, setReservations] = useState([]);
@@ -20,6 +18,12 @@ function MesReservations() {
   const [reviewTrajetId, setReviewTrajetId]     = useState(null);
   const [reviewData, setReviewData]             = useState({ note: 5, commentaire: '' });
   const [submittingReview, setSubmittingReview] = useState(false);
+
+  // Modale motif d'annulation
+  const [showAnnulerModal, setShowAnnulerModal] = useState(false);
+  const [annulerReservationId, setAnnulerReservationId] = useState(null);
+  const [motifAnnulation, setMotifAnnulation]   = useState('');
+  const [submittingAnnuler, setSubmittingAnnuler] = useState(false);
 
   useEffect(() => {
     if (!user || user.role_actuel !== 'PASSAGER') { navigate('/'); return; }
@@ -37,27 +41,41 @@ function MesReservations() {
     fetchReservations();
   }, [user, navigate]);
 
-  // ── Annuler une réservation ───────────────────────────────────────────────
-  const handleAnnuler = async (id) => {
-    const ok = await confirm({
-      title: 'Annuler la réservation',
-      message: 'Confirmer l\'annulation de cette réservation ?',
-      confirmLabel: 'Annuler la réservation',
-      danger: true,
-    });
-    if (!ok) return;
+  // ── Ouvrir la modale d'annulation ────────────────────────────────────────
+  const handleOpenAnnuler = (id) => {
+    setAnnulerReservationId(id);
+    setMotifAnnulation('');
+    setShowAnnulerModal(true);
+  };
+
+  // ── Annuler une réservation (avec motif) ──────────────────────────────────
+  const handleConfirmerAnnulation = async () => {
+    if (!motifAnnulation.trim() || motifAnnulation.trim().length < 3) {
+      toast.error('Veuillez indiquer un motif d\'au moins 3 caractères.');
+      return;
+    }
+    setSubmittingAnnuler(true);
     try {
-      const res = await api.post(`/reservations/${id}/annuler`);
+      const res = await api.post(`/reservations/${annulerReservationId}/annuler`, {
+        motif_annulation: motifAnnulation.trim(),
+      });
       if (res.data.success) {
-        setReservations(prev => prev.map(r => r.id === id ? { ...r, statut: 'ANNULEE' } : r));
+        setReservations(prev =>
+          prev.map(r => r.id === annulerReservationId ? { ...r, statut: 'ANNULEE' } : r)
+        );
         toast.success('Réservation annulée.');
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Erreur lors de l\'annulation.');
+    } finally {
+      setSubmittingAnnuler(false);
+      setShowAnnulerModal(false);
+      setAnnulerReservationId(null);
+      setMotifAnnulation('');
     }
   };
 
-  // ── Envoyer un avis ───────────────────────────────────────────────────────
+  // ── Envoyer un avis ──────────────────────────────────────────────────────
   const handleSubmitReview = async (e) => {
     e.preventDefault();
     setSubmittingReview(true);
@@ -75,7 +93,7 @@ function MesReservations() {
     }
   };
 
-  // ── Couleurs statut ───────────────────────────────────────────────────────
+  // ── Couleurs statut ──────────────────────────────────────────────────────
   const statutConfig = {
     EN_ATTENTE: { label: 'En attente',  bg: 'bg-yellow-100 text-yellow-700', icon: '⏳' },
     ACCEPTEE:   { label: 'Acceptée',    bg: 'bg-green-100 text-green-700',   icon: '✅' },
@@ -189,7 +207,7 @@ function MesReservations() {
                   {(isActive || res.statut === 'EN_ATTENTE') && (
                     <div className="mt-4 pt-4 border-t border-gray-100 flex gap-3">
                       <button
-                        onClick={() => handleAnnuler(res.id)}
+                        onClick={() => handleOpenAnnuler(res.id)}
                         className="bg-red-50 text-red-600 px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-100 transition"
                       >
                         Annuler la réservation
@@ -256,6 +274,69 @@ function MesReservations() {
                 {submittingReview ? 'Envoi…' : 'Envoyer mon avis'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODALE MOTIF D'ANNULATION */}
+      {showAnnulerModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
+            <button
+              onClick={() => {
+                setShowAnnulerModal(false);
+                setAnnulerReservationId(null);
+                setMotifAnnulation('');
+              }}
+              className="absolute top-4 right-4 w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-600"
+            >
+              ✕
+            </button>
+            <h2 className="text-xl font-black text-gainde-dark mb-1">Annuler la réservation</h2>
+            <p className="text-gray-500 text-sm mb-4">
+              Veuillez indiquer la raison de l'annulation.
+            </p>
+
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                Motif de l'annulation <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                rows="3"
+                required
+                placeholder="Ex : Changement de programme, problème personnel..."
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none resize-none text-sm"
+                value={motifAnnulation}
+                onChange={(e) => setMotifAnnulation(e.target.value)}
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Minimum 3 caractères
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowAnnulerModal(false);
+                  setAnnulerReservationId(null);
+                  setMotifAnnulation('');
+                }}
+                className="flex-1 py-3 rounded-xl font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleConfirmerAnnulation}
+                disabled={submittingAnnuler}
+                className={`flex-1 py-3 rounded-xl font-bold transition ${
+                  submittingAnnuler
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-red-500 text-white hover:bg-red-600'
+                }`}
+              >
+                {submittingAnnuler ? 'Envoi...' : 'Confirmer l\'annulation'}
+              </button>
+            </div>
           </div>
         </div>
       )}

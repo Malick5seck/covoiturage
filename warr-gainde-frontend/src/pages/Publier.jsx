@@ -132,21 +132,19 @@ function Publier() {
       return;
     }
 
-    try {
-      const response = await api.post("/trajets", formData);
-      if (response.status === 201 || response.status === 200) {
-        setSuccess(true);
-        setTimeout(() => {
-          navigate(
-            `/recherche?depart=${formData.ville_depart}&arrivee=${formData.ville_arrivee}`,
-          );
-        }, 2000);
-      }
-    } catch (err) {
-      setError(err.response?.data?.message || "Erreur de publication.");
-    } finally {
-      setLoading(false);
-    }
+   try {
+  const response = await api.post("/trajets", formData);
+  if (response.status === 201 || response.status === 200) {
+    setSuccess(true);
+    setTimeout(() => {
+      navigate('/mes-trajets'); // ← Redirige vers la liste de ses trajets
+    }, 2000);
+  }
+} catch (err) {
+  setError(err.response?.data?.message || "Erreur de publication.");
+} finally {
+  setLoading(false);
+}
   };
 
   return (

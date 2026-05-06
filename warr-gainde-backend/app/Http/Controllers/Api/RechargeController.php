@@ -35,72 +35,160 @@ class RechargeController extends Controller
     // ÉTAPE 1 : Initier un paiement PayDunya
     // =========================================================================
 
-    public function initierRecharge(Request $request)
-    {
-        $request->validate([
-            'montant' => 'required|numeric|min:500',
-        ]);
+//     public function initierRecharge(Request $request)
+//     {
+//         $request->validate([
+//             'montant' => 'required|numeric|min:500',
+//         ]);
 
-        $conducteur = $request->user();
+//         $conducteur = $request->user();
 
-        if (!$conducteur->isConducteur()) {
-            return response()->json(['success' => false, 'message' => 'Accès réservé aux chauffeurs.'], 403);
-        }
+//         if (!$conducteur->isConducteur()) {
+//             return response()->json(['success' => false, 'message' => 'Accès réservé aux chauffeurs.'], 403);
+//         }
 
-        $reference = 'WG-' . $conducteur->id . '-' . time();
+//         $reference = 'WG-' . $conducteur->id . '-' . time();
 
-        $response = Http::withHeaders([
-            'PAYDUNYA-MASTER-KEY'  => config('services.paydunya.master_key'),
-            'PAYDUNYA-PRIVATE-KEY' => config('services.paydunya.private_key'),
-            'PAYDUNYA-TOKEN'       => config('services.paydunya.token'),
-        ])->post($this->paydunyaApiV1Root().'/checkout-invoice/create', [
-            'invoice' => [
-                'total_amount' => $request->montant,
-                'description'  => "Recharge portefeuille Warr Gaïndé — {$conducteur->prenom} {$conducteur->nom}",
-            ],
-            'store'   => ['name' => 'Warr Gaïndé'],
-            'actions' => [
-                'cancel_url'   => config('app.frontend_url') . '/portefeuille?status=annule',
-                'return_url'   => config('app.frontend_url') . '/portefeuille?status=succes',
-                'callback_url' => config('app.url') . '/api/recharges/webhook',
-            ],
-            'custom_data' => [
-                'conducteur_id' => $conducteur->id,
-                'montant'       => $request->montant,
-                'reference'     => $reference,
-            ],
-        ]);
+//         $response = Http::withHeaders([
+//             'PAYDUNYA-MASTER-KEY'  => config('services.paydunya.master_key'),
+//             'PAYDUNYA-PRIVATE-KEY' => config('services.paydunya.private_key'),
+//             'PAYDUNYA-TOKEN'       => config('services.paydunya.token'),
+//         ])->post($this->paydunyaApiV1Root().'/checkout-invoice/create', [
+//             'invoice' => [
+//                 'total_amount' => $request->montant,
+//                 'description'  => "Recharge portefeuille Warr Gaïndé — {$conducteur->prenom} {$conducteur->nom}",
+//             ],
+//             'store'   => ['name' => 'Warr Gaïndé'],
+//             'actions' => [
+//                 'cancel_url'   => config('app.frontend_url') . '/portefeuille?status=annule',
+//                 'return_url'   => config('app.frontend_url') . '/portefeuille?status=succes',
+//                 'callback_url' => config('app.url') . '/api/recharges/webhook',
+//             ],
+//             'custom_data' => [
+//                 'conducteur_id' => $conducteur->id,
+//                 'montant'       => $request->montant,
+//                 'reference'     => $reference,
+//             ],
+//         ]);
 
-      if (!$response->successful() || $response->json('response_code') !== '00') {
-    return response()->json([
-        'success' => false,
-        'message' => 'PayDunya : ' . ($response->json('response_text') ?? $response->body()),
-        'code'    => $response->json('response_code'),
-    ], 500);
-}
+//       if (!$response->successful() || $response->json('response_code') !== '00') {
+//     return response()->json([
+//         'success' => false,
+//         'message' => 'PayDunya : ' . ($response->json('response_text') ?? $response->body()),
+//         'code'    => $response->json('response_code'),
+//     ], 500);
+// }
 
-        $token = $response->json('token');
+//         $token = $response->json('token');
 
+//         // On crée l'enregistrement EN_ATTENTE
+//         Recharge::create([
+//             'conducteur_id'    => $conducteur->id,
+//             'montant'          => $request->montant,
+//             'type_transaction' => 'RECHARGE',
+//             'statut'           => 'EN_ATTENTE',
+//             'transaction_id'   => $token,
+//         ]);
+
+//         // Construire l'URL de paiement adaptée au mode
+//         $basePaymentUrl = config('services.paydunya.mode') === 'production'
+//             ? 'https://app.paydunya.com/pay/'
+//             : 'https://app.paydunya.com/sandbox-pay/';
+
+//         return response()->json([
+//             'success'     => true,
+//             'payment_url' => $basePaymentUrl . $token,
+//             'token'       => $token,
+//         ], 200);
+//     }
+public function initierRecharge(Request $request)
+{
+    $request->validate([
+        'montant' => 'required|numeric|min:500',
+    ]);
+
+    $conducteur = $request->user();
+
+    if (!$conducteur->isConducteur()) {
+        return response()->json(['success' => false, 'message' => 'Accès réservé aux chauffeurs.'], 403);
+    }
+
+    // 🧪 MODE SIMULATION : recharge directe sans PayDunya
+    if (config('services.paydunya.mode') === 'simuler') {
+        $tokenSimulation = 'SIMU-' . $conducteur->id . '-' . now()->timestamp;
+        
         // On crée l'enregistrement EN_ATTENTE
         Recharge::create([
             'conducteur_id'    => $conducteur->id,
             'montant'          => $request->montant,
             'type_transaction' => 'RECHARGE',
             'statut'           => 'EN_ATTENTE',
-            'transaction_id'   => $token,
+            'transaction_id'   => $tokenSimulation,
         ]);
 
-        // Construire l'URL de paiement adaptée au mode
-        $basePaymentUrl = config('services.paydunya.mode') === 'production'
-            ? 'https://app.paydunya.com/pay/'
-            : 'https://app.paydunya.com/sandbox-pay/';
+        // On valide immédiatement (crédite le portefeuille)
+        $this->validerLaRecharge($tokenSimulation);
 
         return response()->json([
             'success'     => true,
-            'payment_url' => $basePaymentUrl . $token,
-            'token'       => $token,
+            'message'     => 'Recharge simulée réussie.',
+            'payment_url' => config('app.frontend_url') . '/portefeuille?status=simule',
+            'token'       => $tokenSimulation,
         ], 200);
     }
+
+    // ================= MODE NORMAL (PAYDUNYA) =================
+    $reference = 'WG-' . $conducteur->id . '-' . time();
+
+    $response = Http::withHeaders([
+        'PAYDUNYA-MASTER-KEY'  => config('services.paydunya.master_key'),
+        'PAYDUNYA-PRIVATE-KEY' => config('services.paydunya.private_key'),
+        'PAYDUNYA-TOKEN'       => config('services.paydunya.token'),
+    ])->post($this->paydunyaApiV1Root().'/checkout-invoice/create', [
+        'invoice' => [
+            'total_amount' => $request->montant,
+            'description'  => "Recharge portefeuille Warr Gaïndé — {$conducteur->prenom} {$conducteur->nom}",
+        ],
+        'store'   => ['name' => 'Warr Gaïndé'],
+        'actions' => [
+            'cancel_url'   => config('app.frontend_url') . '/portefeuille?status=annule',
+            'return_url'   => config('app.frontend_url') . '/portefeuille?status=succes',
+            'callback_url' => config('app.url') . '/api/recharges/webhook',
+        ],
+        'custom_data' => [
+            'conducteur_id' => $conducteur->id,
+            'montant'       => $request->montant,
+            'reference'     => $reference,
+        ],
+    ]);
+
+    if (!$response->successful() || $response->json('response_code') !== '00') {
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur PayDunya : ' . ($response->json('response_text') ?? $response->body()),
+        ], 500);
+    }
+
+    $token = $response->json('token');
+
+    Recharge::create([
+        'conducteur_id'    => $conducteur->id,
+        'montant'          => $request->montant,
+        'type_transaction' => 'RECHARGE',
+        'statut'           => 'EN_ATTENTE',
+        'transaction_id'   => $token,
+    ]);
+
+    $basePaymentUrl = config('services.paydunya.mode') === 'production'
+        ? 'https://app.paydunya.com/pay/'
+        : 'https://app.paydunya.com/sandbox-pay/';
+
+    return response()->json([
+        'success'     => true,
+        'payment_url' => $basePaymentUrl . $token,
+        'token'       => $token,
+    ], 200);
+}
 
     // =========================================================================
     // ÉTAPE 2 : Webhook & ÉTAPE 3 : Vérification manuelle

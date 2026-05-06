@@ -61,8 +61,11 @@ function Login() {
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
 
+        // Redirection selon le rôle
         if (user.role_actuel === 'ADMIN') {
           window.location.href = '/admin';
+        } else if (user.role_actuel === 'CHAUFFEUR') {
+          window.location.href = '/mes-trajets';   // ← Chauffeur redirigé ici
         } else {
           window.location.href = '/';
         }

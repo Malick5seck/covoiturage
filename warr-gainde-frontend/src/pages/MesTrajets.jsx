@@ -173,7 +173,7 @@ function MesTrajets() {
             <p className="font-black text-gainde-dark">Demandes reçues</p>
             <p className="text-sm text-gray-500">Gérer les réservations en attente</p>
           </div>
-          <span className="ml-auto text-yellow-500">→</span>
+          <span className="ml-auto text-yellow-500"></span>
         </button>
         <button
           onClick={() => navigate('/mon-vehicule')}
@@ -184,7 +184,7 @@ function MesTrajets() {
             <p className="font-black text-gainde-dark">Mon véhicule</p>
             <p className="text-sm text-gray-500">Gérer votre flotte</p>
           </div>
-          <span className="ml-auto text-gray-400">→</span>
+          <span className="ml-auto text-gray-400"></span>
         </button>
       </div>
 
@@ -304,7 +304,7 @@ function MesTrajets() {
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
                       <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
                     </span>
-                    Trajet en cours — suivi GPS (partagé avec les passagers)
+                    Trajet en cours — suivi GPS
                   </p>
                   <MapTracking trajetId={trajet.id} />
                 </div>
