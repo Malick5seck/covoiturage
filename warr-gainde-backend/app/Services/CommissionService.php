@@ -11,22 +11,13 @@ use Exception;
 
 class CommissionService
 {
-    /**
-     * Retourne le taux de commission global actuellement en vigueur.
-     */
+   
     public static function getTauxActuel(): float
     {
         return (float) (Setting::where('key', 'taux_commission')->value('value') ?? 5.0);
     }
 
-    /**
-     * Calcule le montant de la commission en FCFA (entier).
-     *
-     * @param float $prixParPlace          Prix unitaire (peut venir d'un decimal(10,2))
-     * @param int   $placesOccupees
-     * @param float $tauxCommissionApplique Exemple : 5.0 pour 5 %
-     * @return int  Montant de la commission en FCFA (entier)
-     */
+   
     public function calculer(float $prixParPlace, int $placesOccupees, float $tauxCommissionApplique): int
     {
         $montantTotal = $prixParPlace * $placesOccupees;
@@ -63,11 +54,12 @@ class CommissionService
 
     /**
      * Rembourse une commission (appel public).
-     */
+    
     public function rembourser(int $conducteurId, int $trajetId, int $montant): int
     {
         return $this->ajusterSolde($conducteurId, $trajetId, $montant, 'REMBOURSEMENT');
     }
+    */
 
     /**
      * Méthode privée générique pour toute opération sur le solde.
