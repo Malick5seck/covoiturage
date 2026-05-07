@@ -338,12 +338,22 @@ function Recherche() {
                   <h4 className="font-bold text-gainde-dark text-lg leading-tight">
                     {trajet.conducteur?.prenom} {trajet.conducteur?.nom}
                   </h4>
-                  <p className="text-sm text-gray-500 mt-0.5">
+                  <p className="text-sm text-gray-500 mt-0.5 flex flex-wrap items-center gap-1">
                     ⭐{" "}
                     {trajet.conducteur?.note_moyenne != null
                       ? Number(trajet.conducteur.note_moyenne).toFixed(1)
                       : "N/A"}{" "}
                     • {trajet.vehicule?.marque_modele || "Véhicule standard"}
+                    {/* Climatisation */}
+                    {trajet.vehicule?.climatisation ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full ml-1">
+                        ❄️ Climatisé
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-bold bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full ml-1">
+                        🌬️ Sans clim
+                      </span>
+                    )}
                   </p>
                 </div>
               </div>

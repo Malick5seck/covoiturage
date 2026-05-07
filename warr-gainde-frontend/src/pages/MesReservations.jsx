@@ -178,6 +178,18 @@ function MesReservations() {
                         {trajet?.conducteur && (
                           <span>👤 {trajet.conducteur.prenom} — ⭐ {parseFloat(trajet.conducteur.note_moyenne || 0).toFixed(1)}</span>
                         )}
+                        {/* Climatisation */}
+                        {trajet?.vehicule && (
+                          trajet.vehicule.climatisation ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                              ❄️ Climatisé
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs font-bold bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full">
+                              🌬️ Sans clim
+                            </span>
+                          )
+                        )}
                       </div>
                     </div>
 
