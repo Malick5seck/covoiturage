@@ -3,15 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Mail\ResetPasswordMail;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 
 class ForgotPasswordController extends Controller
 {
-    /**
-     * Demande de lien de réinitialisation par e-mail (broker Laravel).
-     */
     public function sendResetLink(Request $request)
     {
         $request->validate([
@@ -27,27 +26,23 @@ class ForgotPasswordController extends Controller
             ]);
         }
 
-        $status = Password::broker()->sendResetLink(['email' => $user->email]);
+        // Générer le token manuellement
+        $token = Password::broker()->createToken($user);
 
-        if ($status !== Password::RESET_LINK_SENT) {
-            return response()->json([
-                'success' => false,
-                'message' => $this->translatePasswordStatus($status),
-            ], 400);
-        }
+        // Construire l'URL de réinitialisation
+        $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
+        $resetUrl = "{$frontendUrl}/reset-password?token={$token}&email=" . urlencode($user->email);
+
+        // Envoyer l'email DIRECTEMENT (sans notification)
+        Mail::to($user->email)->send(new ResetPasswordMail(
+            resetUrl:      $resetUrl,
+            prenom:        $user->prenom ?? 'Utilisateur',
+            expireMinutes: (int) config('auth.passwords.users.expire', 5),
+        ));
 
         return response()->json([
             'success' => true,
             'message' => 'Si un compte existe pour cet e-mail, un lien de réinitialisation vient d\'être envoyé.',
         ]);
-    }
-
-    private function translatePasswordStatus(string $status): string
-    {
-        return match ($status) {
-            Password::INVALID_USER => 'Aucun compte ne correspond à cet e-mail.',
-            Password::RESET_THROTTLED => 'Veuillez patienter avant de redemander un lien.',
-            default => 'Impossible d\'envoyer le lien pour le moment.',
-        };
     }
 }

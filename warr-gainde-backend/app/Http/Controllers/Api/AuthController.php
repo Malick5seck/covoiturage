@@ -45,44 +45,41 @@ class AuthController extends Controller
     /**
      * CONNEXION — Supporte téléphone OU email
      */
-    public function login(Request $request)
-    {
-        // Détecter si on se connecte par email ou téléphone
-        $parEmail = $request->filled('email') && !$request->filled('telephone');
+   public function login(Request $request)
+{
+    $request->validate([
+        'identifiant' => 'required|string',
+        'password'    => 'required|string',
+    ]);
 
-        $request->validate([
-            'password' => 'required|string',
-            'email'    => 'required_without:telephone|nullable|email',
-            'telephone'=> 'required_without:email|nullable|string',
-        ]);
+    $identifiant = trim($request->input('identifiant'));
 
-        if ($parEmail) {
-            // ─── Connexion par email ───────────────────────────────────────
-            $user = User::where('email', $request->email)->first();
-        } else {
-            // ─── Connexion par téléphone ───────────────────────────────────
-            $telephoneNettoye = str_replace(' ', '', $request->telephone);
-            $user = User::where('telephone', $telephoneNettoye)
-                        ->orWhere('telephone', $request->telephone)
-                        ->first();
-        }
-
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Identifiants incorrects.',
-            ], 401);
-        }
-
-        $token = $user->createToken('warr_gainde_token')->plainTextToken;
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Connexion réussie',
-            'user'    => $user,
-            'token'   => $token,
-        ], 200);
+    // Si le champ contient un @, c'est un email, sinon un téléphone
+    if (filter_var($identifiant, FILTER_VALIDATE_EMAIL)) {
+        $user = User::where('email', $identifiant)->first();
+    } else {
+        $telephoneNettoye = str_replace(' ', '', $identifiant);
+        $user = User::where('telephone', $telephoneNettoye)
+                    ->orWhere('telephone', $identifiant)
+                    ->first();
     }
+
+    if (!$user || !Hash::check($request->password, $user->password)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Identifiants incorrects.',
+        ], 401);
+    }
+
+    $token = $user->createToken('warr_gainde_token')->plainTextToken;
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Connexion réussie',
+        'user'    => $user,
+        'token'   => $token,
+    ], 200);
+}
 
     /**
      * DÉCONNEXION

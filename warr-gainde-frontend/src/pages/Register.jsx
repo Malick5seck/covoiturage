@@ -27,7 +27,6 @@ function Register() {
       const response = await api.post('/register', formData);
 
       if (response.data.success) {
-        // ✅ Correction appliquée : 'token' est maintenant la clé unique renvoyée par le backend
         localStorage.setItem('token', response.data.token);
         localStorage.setItem('user', JSON.stringify(response.data.user));
 
@@ -148,14 +147,21 @@ function Register() {
               />
             </div>
             <div className="flex-1">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Email (Optionnel)</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Email <span className="text-red-500">*</span>
+              </label>
               <input
                 type="email"
+                required
+                placeholder="exemple@email.com"
                 className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none transition"
                 value={formData.email}
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
                 disabled={loading}
               />
+              <p className="text-xs text-gray-500 mt-2">
+                Obligatoire pour la récupération de votre mot de passe.
+              </p>
             </div>
           </div>
 

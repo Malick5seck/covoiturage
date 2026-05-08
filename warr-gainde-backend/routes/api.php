@@ -6,7 +6,6 @@ use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ForgotPasswordController;
-use App\Http\Controllers\Api\PhonePasswordResetController;
 use App\Http\Controllers\Api\ResetPasswordController;
 use App\Http\Controllers\Api\VehiculeController;
 use App\Http\Controllers\Api\TrajetController;
@@ -30,9 +29,6 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('throttle:6,1')->group(function () {
     Route::post('/forgot-password', [ForgotPasswordController::class, 'sendResetLink']);
     Route::post('/reset-password', [ResetPasswordController::class, 'reset']);
-    Route::post('/forgot-password-phone', [PhonePasswordResetController::class, 'forgotPhone']);
-    Route::post('/verify-otp', [PhonePasswordResetController::class, 'verifyOtp']);
-    Route::post('/reset-password-phone', [PhonePasswordResetController::class, 'resetPassword']);
 });
 Route::get('/trajets', [TrajetController::class, 'index']);
 Route::get('/chauffeurs/{conducteurId}/evaluations', [EvaluationController::class, 'indexChauffeur']);
@@ -47,10 +43,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
     // =========================================================================
     // AUTH BROADCASTING — canal privé Reverb via Bearer token
-    //
-    // Laravel cherche par défaut /broadcasting/auth sur le guard "web" (session).
-    // Ici on expose la même logique via l'API guard Sanctum pour que
-    // le frontend puisse s'authentifier avec son Bearer token.
     // =========================================================================
     Route::post('/broadcasting/auth', function (Request $request) {
         return Broadcast::auth($request);
@@ -86,7 +78,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::post('/trajets/{id}/place-liberee', [TrajetController::class, 'libererPlaceManuelle']);
     Route::get('/trajets/{trajetId}/gps/historique', [PositionGpsController::class, 'historiquePositions']);
 
-    // Route GPS unique (suppression du doublon présent dans l'ancienne version)
     Route::get('/trajets/{trajetId}/gps/derniere', [PositionGpsController::class, 'dernierePosition']);
     Route::post('/trajets/{trajetId}/gps', [PositionGpsController::class, 'enregistrerPosition']);
 

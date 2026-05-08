@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/axios";
 import { toast } from "../utils/toast";
 
 function Recherche() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const depart = searchParams.get("depart") || "";
   const arrivee = searchParams.get("arrivee") || "";
@@ -118,7 +120,8 @@ function Recherche() {
   // Ouvre la modale de réservation avancée
   const handleOpenReservation = (trajet) => {
     if (!user) {
-      toast.info("Connectez-vous pour réserver un trajet.");
+      // Redirige vers la page de connexion et sauvegarde l'URL actuelle
+      navigate("/login", { state: { from: location } });
       return;
     }
     setSelectedTrajet(trajet);
