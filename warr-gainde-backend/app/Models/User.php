@@ -2,13 +2,13 @@
 
 namespace App\Models;
 
-use App\Notifications\ApiResetPasswordNotification;
 use Illuminate\Auth\Passwords\CanResetPassword;
 use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
+
 
 class User extends Authenticatable implements CanResetPasswordContract
 {
@@ -185,8 +185,9 @@ class User extends Authenticatable implements CanResetPasswordContract
         return $this->notifications()->whereNull('date_lecture')->count();
     }
 
-    public function sendPasswordResetNotification($token): void
-    {
-        $this->notify(new ApiResetPasswordNotification($token));
-    }
+    public function fcmTokens()
+{
+    return $this->hasMany(FcmToken::class);
+}
+  
 }

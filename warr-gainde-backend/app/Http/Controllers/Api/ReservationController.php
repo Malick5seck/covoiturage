@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\Api\NotificationController;
 use App\Models\Reservation;
 use App\Models\Trajet;
+use App\Services\FcmService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -97,6 +98,12 @@ class ReservationController extends Controller
             "{$passager->prenom} {$passager->nom} demande {$nombrePlaces} place(s) sur votre trajet {$trajet->ville_depart} → {$trajet->ville_arrivee}."
         );
 
+        // Notification push FCM au conducteur
+        $fcm = new FcmService();
+        foreach ($trajet->conducteur->fcmTokens as $fcmToken) {
+            $fcm->send($fcmToken->token, 'Nouvelle demande de réservation', "{$passager->prenom} {$passager->nom} demande {$nombrePlaces} place(s) sur votre trajet {$trajet->ville_depart} → {$trajet->ville_arrivee}.");
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Votre demande de réservation a été envoyée au chauffeur.',
@@ -140,6 +147,12 @@ class ReservationController extends Controller
                 "Bonne nouvelle ! Votre réservation sur le trajet {$trajet->ville_depart} → {$trajet->ville_arrivee} a été acceptée."
             );
 
+            // Notification push FCM au passager
+            $fcm = new FcmService();
+            foreach ($reservation->passager->fcmTokens as $fcmToken) {
+                $fcm->send($fcmToken->token, 'Réservation acceptée', "Votre réservation sur le trajet {$trajet->ville_depart} → {$trajet->ville_arrivee} a été acceptée.");
+            }
+
             return response()->json(['success' => true, 'message' => 'Réservation acceptée.', 'data' => $reservation], 200);
         });
     }
@@ -168,6 +181,12 @@ class ReservationController extends Controller
             'RESERVATION_REFUSEE',
             "Votre réservation a été refusée par le conducteur. Motif : {$request->motif}"
         );
+
+        // Notification push FCM au passager
+        $fcm = new FcmService();
+        foreach ($reservation->passager->fcmTokens as $fcmToken) {
+            $fcm->send($fcmToken->token, 'Réservation refusée', "Votre réservation a été refusée. Motif : {$request->motif}");
+        }
 
         return response()->json(['success' => true, 'message' => 'La réservation a été refusée.'], 200);
     }
@@ -206,6 +225,12 @@ class ReservationController extends Controller
                 'RESERVATION_ANNULEE',
                 "{$request->user()->prenom} {$request->user()->nom} a annulé sa réservation sur votre trajet {$trajet->ville_depart} → {$trajet->ville_arrivee}."
             );
+
+            // Notification push FCM au conducteur
+            $fcm = new FcmService();
+            foreach ($trajet->conducteur->fcmTokens as $fcmToken) {
+                $fcm->send($fcmToken->token, 'Réservation annulée', "{$request->user()->prenom} {$request->user()->nom} a annulé sa réservation sur votre trajet {$trajet->ville_depart} → {$trajet->ville_arrivee}.");
+            }
 
             return response()->json(['success' => true, 'message' => 'Votre réservation a été annulée.'], 200);
         });

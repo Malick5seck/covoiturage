@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Toaster } from "./utils/toast";
+import { Toaster, toast } from "./utils/toast";
 import Navbar from "./components/Navbar";
+import useFcmToken from './hooks/useFcmToken';
 
 // Pages auth
 import Login    from "./pages/Login";
@@ -32,6 +33,14 @@ import Portefeuille  from "./pages/Portefeuille";
 import AdminDashboard from "./pages/AdminDashboard";
 
 function App() {
+  const { notification } = useFcmToken();
+
+  useEffect(() => {
+    if (notification) {
+      toast(notification.body, { icon: '🔔' });
+    }
+  }, [notification]);
+
   return (
     <BrowserRouter>
       <Toaster

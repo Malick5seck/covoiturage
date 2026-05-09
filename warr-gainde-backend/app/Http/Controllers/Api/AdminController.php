@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\AdminAuditLog;
 use App\Models\User;
 use App\Models\Trajet;
 use App\Models\Recharge;
@@ -16,10 +17,6 @@ class AdminController extends Controller
     // HELPERS DE SÉCURITÉ
     // =========================================================================
 
-    /**
-     * Vérifie que l'utilisateur est ADMIN ou MODERATEUR.
-     * Retourne null si OK, sinon une réponse JSON 403.
-     */
     private function checkAdmin(Request $request): ?JsonResponse
     {
         if (!$request->user() || !$request->user()->isAdmin()) {
@@ -31,10 +28,6 @@ class AdminController extends Controller
         return null;
     }
 
-    /**
-     * Vérifie que l'utilisateur est SUPER_ADMIN.
-     * Retourne null si OK, sinon une réponse JSON 403.
-     */
     private function checkSuperAdmin(Request $request): ?JsonResponse
     {
         if (!$request->user() || !$request->user()->isSuperAdmin()) {
@@ -52,26 +45,18 @@ class AdminController extends Controller
 
     public function getDashboardStats(Request $request): JsonResponse
     {
-        if ($response = $this->checkAdmin($request)) {
-            return $response;
-        }
+        if ($response = $this->checkAdmin($request)) return $response;
+
+        AdminAuditLog::log($request, 'VIEW_STATS');
 
         $stats = [
             'total_utilisateurs'        => User::count(),
-            'total_chauffeurs'          => User::where('role_actuel', 'CHAUFFEUR')
-                                               ->whereNull('niveau_accreditation')
-                                               ->count(),
-            'total_passagers'           => User::where('role_actuel', 'PASSAGER')
-                                               ->whereNull('niveau_accreditation')
-                                               ->count(),
+            'total_chauffeurs'          => User::where('role_actuel', 'CHAUFFEUR')->count(),
+            'total_passagers'           => User::where('role_actuel', 'PASSAGER')->count(),
             'chauffeurs_en_attente'     => User::where('role_actuel', 'CHAUFFEUR')
-                                               ->whereNull('niveau_accreditation')
-                                               ->where('statut_verification', 'EN_ATTENTE')
-                                               ->count(),
+                                               ->where('statut_verification', 'EN_ATTENTE')->count(),
             'chauffeurs_valides'        => User::where('role_actuel', 'CHAUFFEUR')
-                                               ->whereNull('niveau_accreditation')
-                                               ->where('statut_verification', 'VALIDE')
-                                               ->count(),
+                                               ->where('statut_verification', 'VALIDE')->count(),
             'trajets_en_cours'          => Trajet::where('statut', 'EN_COURS')->count(),
             'trajets_termines'          => Trajet::where('statut', 'TERMINE')->count(),
             'chiffre_affaires_plateforme' => Recharge::where('type_transaction', 'PRELEVEMENT')
@@ -80,10 +65,7 @@ class AdminController extends Controller
             'taux_commission_actuel'    => Setting::where('key', 'taux_commission')->value('value') ?? '5',
         ];
 
-        return response()->json([
-            'success' => true,
-            'data'    => $stats,
-        ], 200);
+        return response()->json(['success' => true, 'data' => $stats]);
     }
 
     // =========================================================================
@@ -92,9 +74,7 @@ class AdminController extends Controller
 
     public function changerStatutChauffeur(Request $request, $id): JsonResponse
     {
-        if ($response = $this->checkAdmin($request)) {
-            return $response;
-        }
+        if ($response = $this->checkAdmin($request)) return $response;
 
         $request->validate([
             'nouveau_statut' => 'required|in:VALIDE,REFUSE,SUSPENDU',
@@ -105,26 +85,29 @@ class AdminController extends Controller
         if (!$chauffeur->isConducteur()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cet utilisateur n\'est pas un chauffeur.',
+                'message' => "Cet utilisateur n'est pas un chauffeur.",
             ], 400);
         }
 
         $ancienStatut = $chauffeur->statut_verification;
         $chauffeur->update(['statut_verification' => $request->nouveau_statut]);
 
-        // TODO Étape 3 : Déclencher une notification au chauffeur
-        // event(new StatutChauffeurChange($chauffeur, $ancienStatut, $request->nouveau_statut));
+        AdminAuditLog::log($request, 'CHANGE_DRIVER_STATUS', [
+            'chauffeur_nom'   => $chauffeur->prenom . ' ' . $chauffeur->nom,
+            'ancien_statut'   => $ancienStatut,
+            'nouveau_statut'  => $request->nouveau_statut,
+        ], 'User', (int) $id);
 
         return response()->json([
-            'success'  => true,
-            'message'  => 'Le statut du chauffeur a été mis à jour avec succès.',
+            'success'   => true,
+            'message'   => 'Statut du chauffeur mis à jour.',
             'chauffeur' => [
                 'id'                  => $chauffeur->id,
                 'prenom'              => $chauffeur->prenom,
                 'nom'                 => $chauffeur->nom,
                 'statut_verification' => $chauffeur->statut_verification,
             ],
-        ], 200);
+        ]);
     }
 
     // =========================================================================
@@ -133,34 +116,36 @@ class AdminController extends Controller
 
     public function bannirUtilisateur(Request $request, $id): JsonResponse
     {
-        if ($response = $this->checkAdmin($request)) {
-            return $response;
-        }
+        if ($response = $this->checkAdmin($request)) return $response;
 
         $user = User::findOrFail($id);
 
-        // Un admin ne peut pas se bannir lui-même
         if ($user->id === $request->user()->id) {
             return response()->json([
                 'success' => false,
-                'message' => 'Action impossible : vous ne pouvez pas vous bannir vous-même.',
+                'message' => 'Action impossible : vous ne pouvez pas vous bannir.',
             ], 400);
         }
 
-        // Un modérateur ne peut pas bannir un autre admin
         if ($user->isAdmin() && !$request->user()->isSuperAdmin()) {
             return response()->json([
                 'success' => false,
-                'message' => 'Seul le Super Administrateur peut bannir un autre administrateur.',
+                'message' => 'Seul le Super Administrateur peut bannir un admin.',
             ], 403);
         }
 
-        $user->delete(); // SoftDelete — conserve l'historique
+        AdminAuditLog::log($request, 'BAN_USER', [
+            'nom'         => $user->prenom . ' ' . $user->nom,
+            'telephone'   => $user->telephone,
+            'role_actuel' => $user->role_actuel,
+        ], 'User', (int) $id);
+
+        $user->delete(); // SoftDelete
 
         return response()->json([
             'success' => true,
-            'message' => 'L\'utilisateur a été banni de la plateforme.',
-        ], 200);
+            'message' => "L'utilisateur a été banni de la plateforme.",
+        ]);
     }
 
     // =========================================================================
@@ -169,31 +154,33 @@ class AdminController extends Controller
 
     public function configurerTauxCommission(Request $request): JsonResponse
     {
-        if ($response = $this->checkSuperAdmin($request)) {
-            return $response;
-        }
+        if ($response = $this->checkSuperAdmin($request)) return $response;
 
         $request->validate([
             'taux' => 'required|numeric|min:0|max:100',
         ]);
 
-        // Upsert dans la table settings (clé unique 'taux_commission')
+        $ancienTaux = Setting::where('key', 'taux_commission')->value('value');
+
         Setting::updateOrCreate(
             ['key' => 'taux_commission'],
             ['value' => $request->taux]
         );
-
-        // Audit : qui a modifié et quand
         Setting::updateOrCreate(
             ['key' => 'taux_commission_modifie_par'],
             ['value' => $request->user()->id . ' — ' . now()->toDateTimeString()]
         );
 
+        AdminAuditLog::log($request, 'UPDATE_COMMISSION', [
+            'ancien_taux'   => $ancienTaux,
+            'nouveau_taux'  => $request->taux,
+        ], 'Setting');
+
         return response()->json([
             'success'      => true,
-            'message'      => 'Le taux de commission a été mis à jour pour toute la plateforme.',
+            'message'      => 'Taux de commission mis à jour.',
             'nouveau_taux' => $request->taux,
-        ], 200);
+        ]);
     }
 
     // =========================================================================
@@ -202,12 +189,11 @@ class AdminController extends Controller
 
     public function getUsers(Request $request): JsonResponse
     {
-        if ($response = $this->checkAdmin($request)) {
-            return $response;
-        }
+        if ($response = $this->checkAdmin($request)) return $response;
 
-        $users = User::orderBy('created_at', 'desc')
-                     ->paginate(50);
+        AdminAuditLog::log($request, 'VIEW_USERS');
+
+        $users = User::orderBy('created_at', 'desc')->paginate(50);
 
         return response()->json([
             'success'      => true,
@@ -215,7 +201,7 @@ class AdminController extends Controller
             'total'        => $users->total(),
             'current_page' => $users->currentPage(),
             'last_page'    => $users->lastPage(),
-        ], 200);
+        ]);
     }
 
     // =========================================================================
@@ -224,9 +210,7 @@ class AdminController extends Controller
 
     public function ajouterModerateur(Request $request): JsonResponse
     {
-        if ($response = $this->checkSuperAdmin($request)) {
-            return $response;
-        }
+        if ($response = $this->checkSuperAdmin($request)) return $response;
 
         $validatedData = $request->validate([
             'nom'       => 'required|string|max:255',
@@ -248,18 +232,59 @@ class AdminController extends Controller
             'solde_portefeuille'   => 0,
         ]);
 
+        AdminAuditLog::log($request, 'CREATE_MODERATEUR', [
+            'moderateur_nom'       => $moderateur->prenom . ' ' . $moderateur->nom,
+            'moderateur_telephone' => $moderateur->telephone,
+            'moderateur_email'     => $moderateur->email,
+        ], 'User', $moderateur->id);
+
         return response()->json([
             'success' => true,
-            'message' => 'Le compte Modérateur a été créé avec succès.',
+            'message' => 'Compte Modérateur créé.',
             'data'    => [
-                'id'                  => $moderateur->id,
-                'prenom'              => $moderateur->prenom,
-                'nom'                 => $moderateur->nom,
-                'telephone'           => $moderateur->telephone,
-                'email'               => $moderateur->email,
-                'role_actuel'         => $moderateur->role_actuel,
+                'id'                   => $moderateur->id,
+                'prenom'               => $moderateur->prenom,
+                'nom'                  => $moderateur->nom,
+                'telephone'            => $moderateur->telephone,
+                'email'                => $moderateur->email,
+                'role_actuel'          => $moderateur->role_actuel,
                 'niveau_accreditation' => $moderateur->niveau_accreditation,
             ],
         ], 201);
+    }
+
+    // =========================================================================
+    // 7. AUDIT LOG — réservé Super Admin uniquement
+    // =========================================================================
+
+    public function getAuditLogs(Request $request): JsonResponse
+    {
+        if ($response = $this->checkSuperAdmin($request)) return $response;
+
+        $query = AdminAuditLog::with('admin:id,prenom,nom,niveau_accreditation')
+                              ->orderBy('created_at', 'desc');
+
+        if ($request->filled('action')) {
+            $query->where('action', $request->action);
+        }
+        if ($request->filled('admin_id')) {
+            $query->where('admin_id', $request->admin_id);
+        }
+        if ($request->filled('date_debut')) {
+            $query->whereDate('created_at', '>=', $request->date_debut);
+        }
+        if ($request->filled('date_fin')) {
+            $query->whereDate('created_at', '<=', $request->date_fin);
+        }
+
+        $logs = $query->paginate(30);
+
+        return response()->json([
+            'success'      => true,
+            'data'         => $logs->items(),
+            'total'        => $logs->total(),
+            'current_page' => $logs->currentPage(),
+            'last_page'    => $logs->lastPage(),
+        ]);
     }
 }

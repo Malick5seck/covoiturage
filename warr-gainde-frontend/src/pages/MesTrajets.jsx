@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import MapTracking from '../components/MapTracking';
+import MapHistorique from '../components/MapHistorique';  // ← ajouté
 import { getUser } from '../utils/auth';
 import { toast } from '../utils/toast';
 import { useConfirm } from '../context/ConfirmDialogContext.jsx';
@@ -20,6 +21,9 @@ function MesTrajets() {
   const [showModal, setShowModal]                     = useState(false);
   const [selectedPassagers, setSelectedPassagers]     = useState([]);
   const [loadingPassagers, setLoadingPassagers]       = useState(false);
+
+  // Tracé GPS ouvert par carte (id trajet ou null)
+  const [traceOuvert, setTraceOuvert] = useState(null);
 
   useEffect(() => {
     if (!user || user.role_actuel !== 'CHAUFFEUR') {
@@ -206,111 +210,138 @@ function MesTrajets() {
       {/* LISTE DES TRAJETS */}
       {trajets.length > 0 && (
         <div className="grid gap-4">
-          {trajets.map((trajet) => (
-            <div key={trajet.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          {trajets.map((trajet) => {
+            const isTermine = trajet.statut === 'TERMINE';
+            const traceVisible = traceOuvert === trajet.id;
 
-              {/* BANDE STATUT */}
-              <div className={`h-1.5 w-full ${
-                trajet.statut === 'EN_COURS' ? 'bg-blue-400' :
-                trajet.statut === 'TERMINE' ? 'bg-green-400' :
-                trajet.statut === 'ANNULE' ? 'bg-red-400' : 'bg-yellow-400'
-              }`}/>
+            return (
+              <div key={trajet.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
 
-              <div className="p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                {/* BANDE STATUT */}
+                <div className={`h-1.5 w-full ${
+                  trajet.statut === 'EN_COURS' ? 'bg-blue-400' :
+                  trajet.statut === 'TERMINE' ? 'bg-green-400' :
+                  trajet.statut === 'ANNULE' ? 'bg-red-400' : 'bg-yellow-400'
+                }`}/>
 
-                {/* INFOS */}
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statutBadge(trajet.statut)}`}>
-                      {trajet.statut.replace('_', ' ')}
-                    </span>
-                    <span className="text-gray-300 text-xs">#{trajet.id}</span>
-                    {watchId !== null && trajet.statut === 'EN_COURS' && (
-                      <span className="text-xs text-blue-600 font-bold animate-pulse flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping inline-block"/>
-                        GPS Actif
+                <div className="p-6 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+
+                  {/* INFOS */}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statutBadge(trajet.statut)}`}>
+                        {trajet.statut.replace('_', ' ')}
                       </span>
+                      <span className="text-gray-300 text-xs">#{trajet.id}</span>
+                      {watchId !== null && trajet.statut === 'EN_COURS' && (
+                        <span className="text-xs text-blue-600 font-bold animate-pulse flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping inline-block"/>
+                          GPS Actif
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-black text-xl text-gainde-dark">
+                      {trajet.ville_depart} <span className="text-gray-300">→</span> {trajet.ville_arrivee}
+                    </h3>
+                    <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-500">
+                      <span>📅 {new Date(trajet.date_heure_depart).toLocaleDateString('fr-FR', { day:'2-digit', month:'long', year:'numeric' })}</span>
+                      <span>🕐 {trajet.date_heure_depart?.substring(11,16)}</span>
+                      <span>💰 {parseInt(trajet.prix_par_place).toLocaleString('fr-FR')} FCFA / place</span>
+                    </div>
+                  </div>
+
+                  {/* COMPTEUR PLACES + ACTIONS */}
+                  <div className="flex flex-wrap items-center gap-3">
+
+                    {/* Compteur places manuelle */}
+                    {(trajet.statut === 'EN_ATTENTE' || trajet.statut === 'EN_COURS') && (
+                      <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl">
+                        <button onClick={() => handleManualPassenger(trajet.id, 'remove')}
+                          disabled={trajet.places_disponibles >= trajet.nombre_places_totales}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-red-400 hover:text-red-600 disabled:opacity-30 font-bold shadow-sm">
+                          −
+                        </button>
+                        <span className="font-black text-gainde-dark w-14 text-center">
+                          {trajet.nombre_places_totales - trajet.places_disponibles}/{trajet.nombre_places_totales}
+                        </span>
+                        <button onClick={() => handleManualPassenger(trajet.id, 'add')}
+                          disabled={trajet.places_disponibles === 0}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-green-500 hover:text-green-700 disabled:opacity-30 font-bold shadow-sm">
+                          +
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Bouton passagers */}
+                    <button onClick={() => handleSeePassengers(trajet.id)}
+                      className="bg-gray-100 text-gainde-dark px-4 py-2.5 rounded-xl font-bold hover:bg-gray-200 transition text-sm flex items-center gap-1.5">
+                      👥 Passagers
+                    </button>
+
+                    {/* Actions statut */}
+                    {trajet.statut === 'EN_ATTENTE' && (
+                      <>
+                        <button onClick={() => handleStatusChange(trajet.id, 'demarrer')}
+                          className="bg-gainde-dark text-white px-5 py-2.5 rounded-xl font-bold hover:bg-black transition text-sm shadow-md">
+                          🚀 Démarrer
+                        </button>
+                        <button onClick={() => handleAnnuler(trajet.id)}
+                          className="bg-red-50 text-red-600 px-4 py-2.5 rounded-xl font-bold hover:bg-red-100 transition text-sm">
+                          Annuler
+                        </button>
+                      </>
+                    )}
+
+                    {trajet.statut === 'EN_COURS' && (
+                      <button onClick={() => handleStatusChange(trajet.id, 'terminer')}
+                        className="bg-gainde-yellow text-gainde-dark px-5 py-2.5 rounded-xl font-bold hover:bg-yellow-500 transition text-sm shadow-md">
+                        🏁 Terminer
+                      </button>
+                    )}
+
+                    {trajet.statut === 'TERMINE' && (
+                      <span className="bg-green-100 text-green-700 px-4 py-2.5 rounded-xl font-bold text-sm">✅ Terminé</span>
                     )}
                   </div>
-                  <h3 className="font-black text-xl text-gainde-dark">
-                    {trajet.ville_depart} <span className="text-gray-300">→</span> {trajet.ville_arrivee}
-                  </h3>
-                  <div className="flex flex-wrap gap-4 mt-2 text-sm text-gray-500">
-                    <span>📅 {new Date(trajet.date_heure_depart).toLocaleDateString('fr-FR', { day:'2-digit', month:'long', year:'numeric' })}</span>
-                    <span>🕐 {trajet.date_heure_depart?.substring(11,16)}</span>
-                    <span>💰 {parseInt(trajet.prix_par_place).toLocaleString('fr-FR')} FCFA / place</span>
-                  </div>
                 </div>
 
-                {/* COMPTEUR PLACES + ACTIONS */}
-                <div className="flex flex-wrap items-center gap-3">
-
-                  {/* Compteur places manuelle */}
-                  {(trajet.statut === 'EN_ATTENTE' || trajet.statut === 'EN_COURS') && (
-                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 px-3 py-2 rounded-xl">
-                      <button onClick={() => handleManualPassenger(trajet.id, 'remove')}
-                        disabled={trajet.places_disponibles >= trajet.nombre_places_totales}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-red-400 hover:text-red-600 disabled:opacity-30 font-bold shadow-sm">
-                        −
-                      </button>
-                      <span className="font-black text-gainde-dark w-14 text-center">
-                        {trajet.nombre_places_totales - trajet.places_disponibles}/{trajet.nombre_places_totales}
-                      </span>
-                      <button onClick={() => handleManualPassenger(trajet.id, 'add')}
-                        disabled={trajet.places_disponibles === 0}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-green-500 hover:text-green-700 disabled:opacity-30 font-bold shadow-sm">
-                        +
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Bouton passagers */}
-                  <button onClick={() => handleSeePassengers(trajet.id)}
-                    className="bg-gray-100 text-gainde-dark px-4 py-2.5 rounded-xl font-bold hover:bg-gray-200 transition text-sm flex items-center gap-1.5">
-                    👥 Passagers
-                  </button>
-
-                  {/* Actions statut */}
-                  {trajet.statut === 'EN_ATTENTE' && (
-                    <>
-                      <button onClick={() => handleStatusChange(trajet.id, 'demarrer')}
-                        className="bg-gainde-dark text-white px-5 py-2.5 rounded-xl font-bold hover:bg-black transition text-sm shadow-md">
-                        🚀 Démarrer
-                      </button>
-                      <button onClick={() => handleAnnuler(trajet.id)}
-                        className="bg-red-50 text-red-600 px-4 py-2.5 rounded-xl font-bold hover:bg-red-100 transition text-sm">
-                        Annuler
-                      </button>
-                    </>
-                  )}
-
-                  {trajet.statut === 'EN_COURS' && (
-                    <button onClick={() => handleStatusChange(trajet.id, 'terminer')}
-                      className="bg-gainde-yellow text-gainde-dark px-5 py-2.5 rounded-xl font-bold hover:bg-yellow-500 transition text-sm shadow-md">
-                      🏁 Terminer
+                {/* TRACÉ HISTORIQUE (trajet terminé) */}
+                {isTermine && (
+                  <div className="px-6 pb-6 border-t border-gray-100">
+                    <button
+                      onClick={() => setTraceOuvert(traceVisible ? null : trajet.id)}
+                      className="flex items-center gap-2 text-sm font-bold text-gray-600 hover:text-gainde-dark transition mb-3 mt-4"
+                    >
+                      <span className={`transition-transform duration-300 ${traceVisible ? 'rotate-90' : ''}`}>▶</span>
+                      {traceVisible ? 'Masquer le tracé GPS' : 'Voir le tracé GPS du trajet'}
                     </button>
-                  )}
 
-                  {trajet.statut === 'TERMINE' && (
-                    <span className="bg-green-100 text-green-700 px-4 py-2.5 rounded-xl font-bold text-sm">✅ Terminé</span>
-                  )}
-                </div>
+                    {traceVisible && (
+                      <MapHistorique
+                        trajetId={trajet.id}
+                        villeDepart={trajet.ville_depart}
+                        villeArrivee={trajet.ville_arrivee}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {/* GPS en direct (trajet en cours) */}
+                {trajet.statut === 'EN_COURS' && (
+                  <div className="px-6 pb-6 border-t border-gray-100 bg-gray-50/50">
+                    <p className="text-sm font-bold text-blue-600 mb-3 pt-4 flex items-center gap-2">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
+                      </span>
+                      Trajet en cours — suivi GPS
+                    </p>
+                    <MapTracking trajetId={trajet.id} />
+                  </div>
+                )}
               </div>
-
-              {trajet.statut === 'EN_COURS' && (
-                <div className="px-6 pb-6 border-t border-gray-100 bg-gray-50/50">
-                  <p className="text-sm font-bold text-blue-600 mb-3 pt-4 flex items-center gap-2">
-                    <span className="relative flex h-2.5 w-2.5">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
-                    </span>
-                    Trajet en cours — suivi GPS
-                  </p>
-                  <MapTracking trajetId={trajet.id} />
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

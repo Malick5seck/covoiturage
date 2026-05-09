@@ -460,6 +460,18 @@ function Recherche() {
             >
               &times;
             </button>
+
+            {/* Photo du véhicule */}
+            {selectedTrajet.vehicule?.photo_vehicule && (
+              <div className="w-full h-40 rounded-xl overflow-hidden mb-4">
+                <img
+                  src={selectedTrajet.vehicule.photo_vehicule}
+                  alt="Véhicule"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+
             <h2 className="text-2xl font-bold text-gainde-dark mb-2">
               Réserver une place
             </h2>

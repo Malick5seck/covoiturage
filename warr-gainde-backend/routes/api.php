@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\UploadController;
 use App\Http\Controllers\Api\PositionGpsController;
 use App\Http\Controllers\Api\AdminController;
+use App\Http\Controllers\Api\FcmController;
 
 /*
 |--------------------------------------------------------------------------
@@ -51,7 +52,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // -------------------------------------------------------------------------
     // PROFIL & UTILISATEUR
     // -------------------------------------------------------------------------
-    Route::get('/user', fn (Request $request) => $request->user());
+    Route::get('/user', fn(Request $request) => $request->user());
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::put('/profil', [AuthController::class, 'updateProfile']);
     Route::post('/profil/photo', [UploadController::class, 'uploadPhotoProfil']);
@@ -63,6 +64,9 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::apiResource('vehicules', VehiculeController::class);
     Route::post('/vehicules/{id}/photo', [UploadController::class, 'uploadPhotoVehicule']);
     Route::post('/user/photo', [UploadController::class, 'uploadPhotoProfil']);
+    // FCM Tokens
+    Route::post('/fcm-token', [FcmController::class, 'store']);
+    Route::delete('/fcm-token', [FcmController::class, 'destroy']);
 
     // -------------------------------------------------------------------------
     // TRAJETS (CHAUFFEUR)
@@ -122,5 +126,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::delete('/users/{id}', [AdminController::class, 'bannirUtilisateur']);
         Route::post('/commission', [AdminController::class, 'configurerTauxCommission']);
         Route::post('/moderateurs', [AdminController::class, 'ajouterModerateur']);
+        Route::get('/audit-logs', [AdminController::class, 'getAuditLogs']);
     });
 });

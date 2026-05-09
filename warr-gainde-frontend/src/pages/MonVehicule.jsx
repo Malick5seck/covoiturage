@@ -3,17 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { getUser } from '../utils/auth';
 import { toast } from '../utils/toast';
- 
+
 function MonVehicule() {
   const navigate = useNavigate();
   const [user] = useState(() => getUser());
- 
-  // Liste complète
+
   const [vehicules, setVehicules] = useState([]);
- 
-  // ID du véhicule en cours d'édition (null = création)
   const [vehiculeId, setVehiculeId] = useState(null);
- 
+
   const emptyForm = {
     marque_modele: '',
     immatriculation: '',
@@ -23,23 +20,25 @@ function MonVehicule() {
     annee_fabrication: '',
   };
   const [formData, setFormData] = useState(emptyForm);
- 
-  // Photo
-  const [photoFile, setPhotoFile]       = useState(null);
+
+  const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoExistante, setPhotoExistante] = useState(null);
- 
-  const [loading, setLoading]   = useState(true);
-  const [saving, setSaving]     = useState(false);
-  const [deleting, setDeleting] = useState(null); // id en cours de suppression
-  const [message, setMessage]   = useState({ type: '', text: '' });
- 
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(null);
+  const [message, setMessage] = useState({ type: '', text: '' });
+
+  // États pour les erreurs par champ
+  const [fieldErrors, setFieldErrors] = useState({});
+
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     if (user.role_actuel !== 'CHAUFFEUR') { navigate('/'); return; }
     fetchVehicules();
   }, []);
- 
+
   const fetchVehicules = async () => {
     try {
       const res = await api.get('/vehicules');
@@ -50,26 +49,73 @@ function MonVehicule() {
       setLoading(false);
     }
   };
- 
-  // ── Charger un véhicule dans le formulaire ────────────────────────────────
+
+  // Validation d'un champ
+  const validateField = (name, value) => {
+    let erreur = '';
+    switch (name) {
+      case 'marque_modele':
+        if (!value.trim()) erreur = 'La marque et le modèle sont obligatoires.';
+        else if (value.trim().length < 3) erreur = 'Minimum 3 caractères.';
+        break;
+      case 'immatriculation':
+        if (!value.trim()) erreur = "L'immatriculation est obligatoire.";
+        else if (value.trim().length < 4) erreur = 'Immatriculation trop courte.';
+        break;
+      case 'nombre_places_max':
+        if (!value) erreur = 'Le nombre de places est obligatoire.';
+        else if (parseInt(value) < 1 || parseInt(value) > 9) erreur = 'Entre 1 et 9 places.';
+        break;
+      case 'annee_fabrication':
+        if (value && (parseInt(value) < 1990 || parseInt(value) > new Date().getFullYear())) {
+          erreur = `Année entre 1990 et ${new Date().getFullYear()}.`;
+        }
+        break;
+      default:
+        break;
+    }
+    setFieldErrors(prev => ({ ...prev, [name]: erreur }));
+    return erreur;
+  };
+
+  const handleFieldChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    validateField(name, value);
+  };
+
+  const validateForm = () => {
+    const erreurs = {};
+    ['marque_modele', 'immatriculation', 'nombre_places_max'].forEach(key => {
+      const err = validateField(key, formData[key]);
+      if (err) erreurs[key] = err;
+    });
+    if (formData.annee_fabrication) {
+      const err = validateField('annee_fabrication', formData.annee_fabrication);
+      if (err) erreurs.annee_fabrication = err;
+    }
+    setFieldErrors(erreurs);
+    return Object.keys(erreurs).length === 0;
+  };
+
   const loadIntoForm = (v) => {
     setVehiculeId(v.id);
     setFormData({
-      marque_modele:     v.marque_modele     || '',
-      immatriculation:   v.immatriculation   || '',
+      marque_modele: v.marque_modele || '',
+      immatriculation: v.immatriculation || '',
       nombre_places_max: v.nombre_places_max || '',
-      climatisation:     v.climatisation === 1 || v.climatisation === true,
-      couleur:           v.couleur           || '',
+      climatisation: v.climatisation === 1 || v.climatisation === true,
+      couleur: v.couleur || '',
       annee_fabrication: v.annee_fabrication || '',
     });
     setPhotoExistante(v.photo_vehicule || null);
     setPhotoFile(null);
     setPhotoPreview(null);
     setMessage({ type: '', text: '' });
+    setFieldErrors({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
- 
-  // ── Réinitialiser le formulaire pour créer un nouveau véhicule ────────────
+
   const resetForm = () => {
     setVehiculeId(null);
     setFormData(emptyForm);
@@ -77,10 +123,10 @@ function MonVehicule() {
     setPhotoPreview(null);
     setPhotoExistante(null);
     setMessage({ type: '', text: '' });
+    setFieldErrors({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
- 
-  // ── Upload photo ──────────────────────────────────────────────────────────
+
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -97,29 +143,35 @@ function MonVehicule() {
     setPhotoPreview(URL.createObjectURL(file));
     setMessage({ type: '', text: '' });
   };
- 
-  // ── Soumission ────────────────────────────────────────────────────────────
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!validateForm()) {
+      toast.error('Veuillez corriger les erreurs avant d\'enregistrer.');
+      return;
+    }
+
     if (!vehiculeId && !photoFile) {
       setMessage({ type: 'error', text: 'La photo du véhicule est obligatoire.' });
       return;
     }
+
     setSaving(true);
     setMessage({ type: '', text: '' });
- 
+
     try {
       const payload = { ...formData, climatisation: formData.climatisation ? 1 : 0 };
       let response;
- 
+
       if (vehiculeId) {
         response = await api.put(`/vehicules/${vehiculeId}`, payload);
       } else {
         response = await api.post('/vehicules', payload);
       }
- 
+
       const newId = vehiculeId || response.data.data?.id;
- 
+
       if (photoFile && newId) {
         const fd = new FormData();
         fd.append('photo', photoFile);
@@ -130,17 +182,15 @@ function MonVehicule() {
         setPhotoFile(null);
         setPhotoPreview(null);
       }
- 
+
       setMessage({
         type: 'success',
         text: vehiculeId ? 'Véhicule mis à jour avec succès !' : 'Véhicule enregistré avec succès !',
       });
- 
+
       if (!vehiculeId) setVehiculeId(newId);
- 
-      // Rafraîchir la liste
+
       await fetchVehicules();
- 
     } catch (err) {
       const errorMsg = err.response?.data?.errors
         ? Object.values(err.response.data.errors).flat()[0]
@@ -151,8 +201,7 @@ function MonVehicule() {
       setTimeout(() => setMessage({ type: '', text: '' }), 5000);
     }
   };
- 
-  // ── Supprimer un véhicule ─────────────────────────────────────────────────
+
   const handleDelete = async (id) => {
     if (!window.confirm('Supprimer ce véhicule ? Cette action est irréversible.')) return;
     setDeleting(id);
@@ -167,22 +216,20 @@ function MonVehicule() {
       setDeleting(null);
     }
   };
- 
+
   if (loading) return (
     <div className="flex items-center justify-center py-24">
       <div className="animate-spin h-10 w-10 rounded-full border-4 border-gainde-yellow border-t-transparent" />
     </div>
   );
- 
+
   const photoActuelle = photoPreview || photoExistante;
- 
+
   return (
     <div className="max-w-3xl mx-auto py-10 px-4 space-y-10">
- 
-      {/* ── FORMULAIRE ──────────────────────────────────────────────────────── */}
+
       <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
- 
-        {/* En-tête formulaire */}
+
         <div className="flex justify-between items-start mb-8">
           <div>
             <h1 className="text-3xl font-black text-gainde-dark">
@@ -203,7 +250,7 @@ function MonVehicule() {
             </button>
           )}
         </div>
- 
+
         {message.text && (
           <div className={`mb-6 p-4 rounded-2xl font-bold border-l-4 ${
             message.type === 'success'
@@ -213,9 +260,9 @@ function MonVehicule() {
             {message.type === 'success' ? '✅' : '⚠️'} {message.text}
           </div>
         )}
- 
+
         <form onSubmit={handleSubmit} className="space-y-8">
- 
+
           {/* PHOTO */}
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-3">
@@ -253,41 +300,49 @@ function MonVehicule() {
               <p className="mt-2 text-sm text-green-600 font-semibold">✓ {photoFile.name} sélectionné</p>
             )}
           </div>
- 
+
           {/* INFOS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700 ml-1">
                 Marque & Modèle <span className="text-red-500">*</span>
               </label>
-              <input type="text" required placeholder="Ex: Toyota Hiace"
-                className="w-full px-5 py-4 rounded-2xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-gainde-yellow outline-none transition border border-transparent focus:border-gainde-yellow"
+              <input type="text" name="marque_modele" required placeholder="Ex: Toyota Hiace"
+                className={`w-full px-5 py-4 rounded-2xl bg-gray-50 focus:ring-2 focus:ring-gainde-yellow outline-none transition border ${
+                  fieldErrors.marque_modele ? 'border-red-500' : 'border-transparent focus:border-gainde-yellow'
+                }`}
                 value={formData.marque_modele}
-                onChange={e => setFormData({ ...formData, marque_modele: e.target.value })} />
+                onChange={handleFieldChange} />
+              {fieldErrors.marque_modele && <p className="text-red-500 text-xs">{fieldErrors.marque_modele}</p>}
             </div>
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700 ml-1">
                 Immatriculation <span className="text-red-500">*</span>
               </label>
-              <input type="text" required placeholder="Ex: DK-1234-AB"
-                className="w-full px-5 py-4 rounded-2xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-gainde-yellow outline-none transition border border-transparent focus:border-gainde-yellow uppercase"
+              <input type="text" name="immatriculation" required placeholder="Ex: DK-1234-AB"
+                className={`w-full px-5 py-4 rounded-2xl bg-gray-50 focus:ring-2 focus:ring-gainde-yellow outline-none transition border uppercase ${
+                  fieldErrors.immatriculation ? 'border-red-500' : 'border-transparent focus:border-gainde-yellow'
+                }`}
                 value={formData.immatriculation}
-                onChange={e => setFormData({ ...formData, immatriculation: e.target.value.toUpperCase() })} />
+                onChange={handleFieldChange} />
+              {fieldErrors.immatriculation && <p className="text-red-500 text-xs">{fieldErrors.immatriculation}</p>}
             </div>
           </div>
- 
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700 ml-1">
                 Nombre de places passagers <span className="text-red-500">*</span>
               </label>
-              <input type="number" min="1" max="9" required placeholder="Ex: 7"
-                className="w-full px-5 py-4 rounded-2xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-gainde-yellow outline-none transition border border-transparent focus:border-gainde-yellow"
+              <input type="number" name="nombre_places_max" min="1" max="9" required placeholder="Ex: 7"
+                className={`w-full px-5 py-4 rounded-2xl bg-gray-50 focus:ring-2 focus:ring-gainde-yellow outline-none transition border ${
+                  fieldErrors.nombre_places_max ? 'border-red-500' : 'border-transparent focus:border-gainde-yellow'
+                }`}
                 value={formData.nombre_places_max}
-                onChange={e => setFormData({ ...formData, nombre_places_max: e.target.value })} />
+                onChange={handleFieldChange} />
+              {fieldErrors.nombre_places_max && <p className="text-red-500 text-xs">{fieldErrors.nombre_places_max}</p>}
             </div>
- 
-            {/* Toggle climatisation */}
+
             <div className="flex items-center justify-between px-5 py-4 bg-gray-50 rounded-2xl mt-7 border border-transparent">
               <div>
                 <p className="font-bold text-gray-700">Climatisation ❄️</p>
@@ -303,7 +358,7 @@ function MonVehicule() {
               </label>
             </div>
           </div>
- 
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700 ml-1">Couleur</label>
@@ -314,13 +369,16 @@ function MonVehicule() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-bold text-gray-700 ml-1">Année de fabrication</label>
-              <input type="number" min="1990" max={new Date().getFullYear()} placeholder="Ex: 2018"
-                className="w-full px-5 py-4 rounded-2xl bg-gray-50 focus:bg-white focus:ring-2 focus:ring-gainde-yellow outline-none transition border border-transparent focus:border-gainde-yellow"
+              <input type="number" name="annee_fabrication" min="1990" max={new Date().getFullYear()} placeholder="Ex: 2018"
+                className={`w-full px-5 py-4 rounded-2xl bg-gray-50 focus:ring-2 focus:ring-gainde-yellow outline-none transition border ${
+                  fieldErrors.annee_fabrication ? 'border-red-500' : 'border-transparent focus:border-gainde-yellow'
+                }`}
                 value={formData.annee_fabrication}
-                onChange={e => setFormData({ ...formData, annee_fabrication: e.target.value })} />
+                onChange={handleFieldChange} />
+              {fieldErrors.annee_fabrication && <p className="text-red-500 text-xs">{fieldErrors.annee_fabrication}</p>}
             </div>
           </div>
- 
+
           <button type="submit" disabled={saving}
             className={`w-full py-5 rounded-2xl font-black text-lg transition shadow-lg ${
               saving
@@ -335,14 +393,14 @@ function MonVehicule() {
           </button>
         </form>
       </div>
- 
+
       {/* ── LISTE DES VÉHICULES ──────────────────────────────────────────────── */}
       {vehicules.length > 0 && (
         <div>
           <h2 className="text-xl font-black text-gainde-dark mb-4">
             Ma flotte ({vehicules.length} véhicule{vehicules.length > 1 ? 's' : ''})
           </h2>
- 
+
           <div className="grid gap-4">
             {vehicules.map((v) => (
               <div key={v.id}
@@ -350,8 +408,6 @@ function MonVehicule() {
                   vehiculeId === v.id ? 'border-gainde-yellow ring-2 ring-gainde-yellow/30' : 'border-gray-100'
                 }`}>
                 <div className="flex flex-col sm:flex-row gap-0">
- 
-                  {/* Photo */}
                   <div className="w-full sm:w-36 h-36 shrink-0 bg-gray-100 overflow-hidden">
                     {v.photo_vehicule ? (
                       <img src={v.photo_vehicule} alt={v.marque_modele}
@@ -362,8 +418,7 @@ function MonVehicule() {
                       </div>
                     )}
                   </div>
- 
-                  {/* Infos */}
+
                   <div className="flex-1 p-5 flex flex-col justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -374,8 +429,7 @@ function MonVehicule() {
                           </span>
                         )}
                       </div>
- 
-                      {/* Détails en ligne */}
+
                       <div className="flex flex-wrap gap-2 mt-2">
                         <span className="inline-flex items-center gap-1 text-xs font-bold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
                           🔑 {v.immatriculation}
@@ -383,8 +437,6 @@ function MonVehicule() {
                         <span className="inline-flex items-center gap-1 text-xs font-bold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
                           👥 {v.nombre_places_max} places
                         </span>
- 
-                        {/* Climatisation */}
                         {v.climatisation ? (
                           <span className="inline-flex items-center gap-1 text-xs font-bold bg-blue-50 text-blue-700 px-2.5 py-1 rounded-full">
                             ❄️ Climatisé
@@ -394,7 +446,6 @@ function MonVehicule() {
                             🌬️ Sans clim
                           </span>
                         )}
- 
                         {v.couleur && (
                           <span className="inline-flex items-center gap-1 text-xs font-bold bg-gray-100 text-gray-600 px-2.5 py-1 rounded-full">
                             🎨 {v.couleur}
@@ -407,8 +458,7 @@ function MonVehicule() {
                         )}
                       </div>
                     </div>
- 
-                    {/* Actions */}
+
                     <div className="flex gap-2 mt-4">
                       <button onClick={() => loadIntoForm(v)}
                         className="flex-1 sm:flex-none bg-gainde-dark text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-black transition">
@@ -428,8 +478,7 @@ function MonVehicule() {
           </div>
         </div>
       )}
- 
-      {/* Si aucun véhicule */}
+
       {vehicules.length === 0 && !loading && (
         <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center">
           <p className="text-4xl mb-3">🚗</p>
@@ -440,5 +489,5 @@ function MonVehicule() {
     </div>
   );
 }
- 
+
 export default MonVehicule;

@@ -25,7 +25,6 @@ function Publier() {
   const [mesVehicules, setMesVehicules] = useState([]);
   const [soldeActuel, setSoldeActuel] = useState(0);
 
-  // NOUVEAU STATE : Pour stocker les coordonnées GPS et afficher la carte
   const [mapPosition, setMapPosition] = useState(null);
 
   useEffect(() => {
@@ -72,6 +71,9 @@ function Publier() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
+  // État pour les erreurs de validation par champ
+  const [fieldErrors, setFieldErrors] = useState({});
+
   const vehiculeSelectionne = mesVehicules.find(
     (v) => v.id.toString() === formData.vehicule_id.toString(),
   );
@@ -81,14 +83,73 @@ function Publier() {
   const commissionEstimee =
     parseFloat(formData.prix_place || 0) * placesMax * 0.05;
 
-  // --- RÉCUPÉRATION DE LA POSITION & AFFICHAGE DE LA CARTE ---
+  // Validation d'un seul champ (appelée onChange)
+  const validateField = (name, value) => {
+    let erreur = "";
+    const val = value.toString().trim();
+    switch (name) {
+      case "ville_depart":
+      case "ville_arrivee":
+        if (!val) erreur = "Ce champ est obligatoire.";
+        else if (val.length < 2) erreur = "Minimum 2 caractères.";
+        break;
+      case "point_embarquement":
+        if (!val) erreur = "Le point d'embarquement est obligatoire.";
+        break;
+      case "date_depart":
+        if (!val) erreur = "La date est obligatoire.";
+        else {
+          const selected = new Date(val + "T00:00:00");
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          if (selected < today) erreur = "La date doit être aujourd'hui ou dans le futur.";
+        }
+        break;
+      case "heure_depart":
+      case "heure_arrivee_estimee":
+        if (!val) erreur = "L'heure est obligatoire.";
+        break;
+      case "prix_place":
+        if (!val) erreur = "Le prix est obligatoire.";
+        else if (isNaN(parseFloat(val)) || parseFloat(val) < 500)
+          erreur = "Le prix minimum est de 500 FCFA.";
+        break;
+      case "vehicule_id":
+        if (!val) erreur = "Veuillez sélectionner un véhicule.";
+        break;
+      default:
+        break;
+    }
+    setFieldErrors((prev) => ({ ...prev, [name]: erreur }));
+    return erreur;
+  };
+
+  // Gestionnaire générique pour mettre à jour un champ et sa validation
+  const handleFieldChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    validateField(name, value);
+  };
+
+  // Validation complète au submit
+  const validateForm = () => {
+    const erreurs = {};
+    Object.keys(formData).forEach((key) => {
+      if (key === "point_embarquement" || key === "ville_depart" || key === "ville_arrivee" || key === "date_depart" || key === "heure_depart" || key === "heure_arrivee_estimee" || key === "prix_place" || key === "vehicule_id") {
+        const err = validateField(key, formData[key]);
+        if (err) erreurs[key] = err;
+      }
+    });
+    setFieldErrors(erreurs);
+    return Object.keys(erreurs).length === 0;
+  };
+
   const handleGetLocation = () => {
     if (!navigator.geolocation) {
       toast.warning("La géolocalisation n'est pas supportée par votre navigateur.");
       return;
     }
 
-    // Affiche un petit message de chargement temporaire dans l'input
     setFormData({
       ...formData,
       point_embarquement: "Recherche du signal GPS...",
@@ -99,10 +160,8 @@ function Publier() {
         const { latitude, longitude } = position.coords;
         const coords = [latitude, longitude];
 
-        // On met à jour l'état de la carte pour l'afficher
         setMapPosition(coords);
 
-        // On remplit l'input
         setFormData({
           ...formData,
           point_embarquement: `Coordonnées GPS : ${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
@@ -115,42 +174,50 @@ function Publier() {
           "Impossible de récupérer votre position. Vérifiez les permissions GPS.",
         );
       },
-      { enableHighAccuracy: true }, // Demande plus de précision
+      { enableHighAccuracy: true },
     );
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
     setSuccess(false);
 
-    // Vérification du solde (doublée par le backend)
-    if (soldeActuel < commissionEstimee) {
-      setError(`Solde insuffisant...`);
-      setLoading(false);
+    if (!validateForm()) {
+      toast.error("Veuillez corriger les erreurs avant de publier.");
       return;
     }
 
-   try {
-  const response = await api.post("/trajets", formData);
-  if (response.status === 201 || response.status === 200) {
-    setSuccess(true);
-    setTimeout(() => {
-      navigate('/mes-trajets'); // ← Redirige vers la liste de ses trajets
-    }, 2000);
-  }
-} catch (err) {
-  setError(err.response?.data?.message || "Erreur de publication.");
-} finally {
-  setLoading(false);
-}
+    if (soldeActuel < commissionEstimee) {
+      setError(`Solde insuffisant...`);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await api.post("/trajets", formData);
+      if (response.status === 201 || response.status === 200) {
+        setSuccess(true);
+        setTimeout(() => {
+          navigate("/mes-trajets");
+        }, 2000);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || "Erreur de publication.");
+    } finally {
+      setLoading(false);
+    }
   };
+
+  // Helper pour afficher une erreur sous un champ
+  const fieldError = (name) => fieldErrors[name] ? (
+    <p className="text-red-500 text-xs mt-1">{fieldErrors[name]}</p>
+  ) : null;
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-        {/* En-tête */}
         <div className="text-center mb-10">
           <h1 className="text-3xl font-extrabold text-gainde-dark">
             Publier un trajet
@@ -172,7 +239,6 @@ function Publier() {
           </div>
         )}
 
-        {/* ALERTE SI AUCUN VÉHICULE N'EST ENREGISTRÉ */}
         {mesVehicules.length === 0 && !loading && (
           <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-gainde-yellow text-yellow-800 font-medium flex justify-between items-center">
             <span>
@@ -194,7 +260,6 @@ function Publier() {
               📍 Itinéraire et Lieu de rencontre
             </h3>
 
-            {/* Villes départ / arrivée */}
             <div className="flex flex-col md:flex-row gap-4">
               <div className="flex-1">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -202,14 +267,16 @@ function Publier() {
                 </label>
                 <input
                   type="text"
+                  name="ville_depart"
                   required
                   placeholder="Ex: Dakar"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  className={`w-full px-4 py-3 rounded-xl border outline-none ${
+                    fieldErrors.ville_depart ? "border-red-500 focus:ring-red-200" : "border-gray-200 focus:border-gainde-yellow"
+                  }`}
                   value={formData.ville_depart}
-                  onChange={(e) =>
-                    setFormData({ ...formData, ville_depart: e.target.value })
-                  }
+                  onChange={handleFieldChange}
                 />
+                {fieldError("ville_depart")}
               </div>
               <div className="flex-1">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -217,18 +284,19 @@ function Publier() {
                 </label>
                 <input
                   type="text"
+                  name="ville_arrivee"
                   required
                   placeholder="Ex: Thiès"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  className={`w-full px-4 py-3 rounded-xl border outline-none ${
+                    fieldErrors.ville_arrivee ? "border-red-500 focus:ring-red-200" : "border-gray-200 focus:border-gainde-yellow"
+                  }`}
                   value={formData.ville_arrivee}
-                  onChange={(e) =>
-                    setFormData({ ...formData, ville_arrivee: e.target.value })
-                  }
+                  onChange={handleFieldChange}
                 />
+                {fieldError("ville_arrivee")}
               </div>
             </div>
 
-            {/* Point d'embarquement */}
             <div className="w-full mt-4">
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Point d'embarquement exact
@@ -236,16 +304,14 @@ function Publier() {
               <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="text"
+                  name="point_embarquement"
                   required
                   placeholder="Ex: Gare Routière, ou coordonnées..."
-                  className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  className={`flex-1 px-4 py-3 rounded-xl border outline-none ${
+                    fieldErrors.point_embarquement ? "border-red-500 focus:ring-red-200" : "border-gray-200 focus:border-gainde-yellow"
+                  }`}
                   value={formData.point_embarquement}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      point_embarquement: e.target.value,
-                    })
-                  }
+                  onChange={handleFieldChange}
                 />
                 <button
                   type="button"
@@ -255,8 +321,8 @@ function Publier() {
                   <span>📍</span> Ma position
                 </button>
               </div>
+              {fieldError("point_embarquement")}
 
-              {/* AFFICHAGE DE LA CARTE */}
               {mapPosition && (
                 <div className="mt-4 h-64 w-full rounded-xl overflow-hidden border border-gray-300 shadow-inner z-0 relative">
                   <MapContainer
@@ -289,13 +355,15 @@ function Publier() {
                 </label>
                 <input
                   type="date"
+                  name="date_depart"
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  className={`w-full px-4 py-3 rounded-xl border outline-none ${
+                    fieldErrors.date_depart ? "border-red-500 focus:ring-red-200" : "border-gray-200 focus:border-gainde-yellow"
+                  }`}
                   value={formData.date_depart}
-                  onChange={(e) =>
-                    setFormData({ ...formData, date_depart: e.target.value })
-                  }
+                  onChange={handleFieldChange}
                 />
+                {fieldError("date_depart")}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -303,13 +371,15 @@ function Publier() {
                 </label>
                 <input
                   type="time"
+                  name="heure_depart"
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  className={`w-full px-4 py-3 rounded-xl border outline-none ${
+                    fieldErrors.heure_depart ? "border-red-500 focus:ring-red-200" : "border-gray-200 focus:border-gainde-yellow"
+                  }`}
                   value={formData.heure_depart}
-                  onChange={(e) =>
-                    setFormData({ ...formData, heure_depart: e.target.value })
-                  }
+                  onChange={handleFieldChange}
                 />
+                {fieldError("heure_depart")}
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -317,16 +387,15 @@ function Publier() {
                 </label>
                 <input
                   type="time"
+                  name="heure_arrivee_estimee"
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  className={`w-full px-4 py-3 rounded-xl border outline-none ${
+                    fieldErrors.heure_arrivee_estimee ? "border-red-500 focus:ring-red-200" : "border-gray-200 focus:border-gainde-yellow"
+                  }`}
                   value={formData.heure_arrivee_estimee}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      heure_arrivee_estimee: e.target.value,
-                    })
-                  }
+                  onChange={handleFieldChange}
                 />
+                {fieldError("heure_arrivee_estimee")}
               </div>
             </div>
           </div>
@@ -342,12 +411,13 @@ function Publier() {
                   Véhicule utilisé
                 </label>
                 <select
+                  name="vehicule_id"
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none bg-white"
+                  className={`w-full px-4 py-3 rounded-xl border bg-white outline-none ${
+                    fieldErrors.vehicule_id ? "border-red-500 focus:ring-red-200" : "border-gray-200 focus:border-gainde-yellow"
+                  }`}
                   value={formData.vehicule_id}
-                  onChange={(e) =>
-                    setFormData({ ...formData, vehicule_id: e.target.value })
-                  }
+                  onChange={handleFieldChange}
                 >
                   <option value="">Sélectionnez un véhicule...</option>
                   {mesVehicules.map((v) => (
@@ -357,6 +427,7 @@ function Publier() {
                     </option>
                   ))}
                 </select>
+                {fieldError("vehicule_id")}
               </div>
 
               <div className="flex-1">
@@ -365,16 +436,18 @@ function Publier() {
                 </label>
                 <input
                   type="number"
+                  name="prix_place"
                   min="500"
                   step="100"
                   required
                   placeholder="Ex: 2500"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  className={`w-full px-4 py-3 rounded-xl border outline-none ${
+                    fieldErrors.prix_place ? "border-red-500 focus:ring-red-200" : "border-gray-200 focus:border-gainde-yellow"
+                  }`}
                   value={formData.prix_place}
-                  onChange={(e) =>
-                    setFormData({ ...formData, prix_place: e.target.value })
-                  }
+                  onChange={handleFieldChange}
                 />
+                {fieldError("prix_place")}
               </div>
             </div>
           </div>
