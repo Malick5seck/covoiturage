@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getUser, getToken, logout as authLogout } from '../utils/auth';
 import { useNotificationsTempsReel } from '../hooks/UseNotificationsTempsReel';
-import NotificationToast from '../components/NotificationToast'; // Correction du chemin
+import NotificationToast from '../components/NotificationToast';
 import api from '../api/axios';
 
 function Navbar() {
@@ -42,11 +42,6 @@ function Navbar() {
       setBadge(prev => prev + 1);
     }
   }, [nouvelleNotif]);
-
-  // Réinitialiser le badge quand on visite la page des notifications (optionnel)
-  const handleNotificationsClick = () => {
-    // On peut laisser l'utilisateur le lire, le badge se mettra à jour au prochain fetch
-  };
 
   const handleLogout = () => {
     authLogout();
@@ -105,6 +100,9 @@ function Navbar() {
                     <Link to="/portefeuille" className={`px-4 py-2 rounded-xl font-bold text-sm transition ${isActive('/portefeuille')}`}>
                       💰 Portefeuille
                     </Link>
+                    <Link to="/mes-evaluations" className={`px-4 py-2 rounded-xl font-bold text-sm transition ${isActive('/mes-evaluations')}`}>
+                      ⭐ Avis
+                    </Link>
                   </>
                 )}
 
@@ -123,7 +121,6 @@ function Navbar() {
                 <>
                   {/* Notifications avec badge */}
                   <Link to="/notifications" title="Notifications"
-                    onClick={handleNotificationsClick}
                     className="relative p-2.5 rounded-xl transition">
                     🔔
                     {badge > 0 && (
@@ -179,7 +176,7 @@ function Navbar() {
             </button>
           </div>
 
-          {/* MENU MOBILE (inchangé) */}
+          {/* MENU MOBILE */}
           {menuOpen && (
             <div className="md:hidden border-t border-gray-100 py-3 space-y-1">
               {user ? (
@@ -198,6 +195,7 @@ function Navbar() {
                       <NavMobileLink to="/publier"          onClick={() => setMenuOpen(false)}>➕ Publier un trajet</NavMobileLink>
                       <NavMobileLink to="/mon-vehicule"     onClick={() => setMenuOpen(false)}>🚗 Mon véhicule</NavMobileLink>
                       <NavMobileLink to="/portefeuille"     onClick={() => setMenuOpen(false)}>💰 Mon portefeuille</NavMobileLink>
+                      <NavMobileLink to="/mes-evaluations"  onClick={() => setMenuOpen(false)}>⭐ Avis reçus</NavMobileLink>
                     </>
                   )}
 

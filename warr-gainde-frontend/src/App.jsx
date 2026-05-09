@@ -16,6 +16,7 @@ import Profil        from "./pages/Profil";
 import Notifications from "./pages/Notifications";
 import AddPhoto      from "./components/AddPhoto";
 import AttenteValidation from "./pages/AttenteValidation";
+import EvaluationsRecues from "./pages/EvaluationsRecues";
 
 // Pages passager
 import MesReservations from "./pages/MesReservations";
@@ -83,6 +84,7 @@ function App() {
           <Route path="/publier"         element={<Publier />} />
           <Route path="/mon-vehicule"    element={<MonVehicule />} />
           <Route path="/portefeuille"    element={<Portefeuille />} />
+          <Route path="/mes-evaluations" element={<EvaluationsRecues />} />
 
           {/* Admin — toutes les sous-sections gérées en interne */}
           <Route path="/admin" element={<AdminDashboard />} />
