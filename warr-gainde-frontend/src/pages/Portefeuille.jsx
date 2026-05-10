@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import{ useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 
@@ -24,10 +24,10 @@ function Portefeuille() {
       return;
     }
 
-    // Si on revient de PayDunya avec un token en attente, on vérifie
     const token = searchParams.get('token');
     const status = searchParams.get('status');
 
+    // Gestion du retour PayDunya (succes)
     if (token && status === 'succes') {
       api.post(`/portefeuille/verifier/${token}`)
         .then(res => {
@@ -39,6 +39,12 @@ function Portefeuille() {
         .catch(() => {});
     }
 
+    // Gestion du mode simulation (pas de token)
+    if (status === 'simule') {
+      setTimeout(() => setMessage({ type: 'success', text: 'Recharge simulée réussie !' }), 0);
+    }
+
+    // Chargement des données fraîches dans tous les cas
     const fetchData = async () => {
       try {
         const [userRes, histRes] = await Promise.all([
@@ -66,9 +72,9 @@ function Portefeuille() {
     setMessage({ type: '', text: '' });
 
     try {
-      const res = await api.post('/portefeuille/initier', { montant });
+      const res = await api.post('/portefeuille/initier', { montant, methode });
       if (res.data.success) {
-        // Redirection vers la page de paiement PayDunya
+        // Redirection vers la page de paiement PayDunya (ou simulation)
         window.location.href = res.data.payment_url;
       }
     } catch (err) {

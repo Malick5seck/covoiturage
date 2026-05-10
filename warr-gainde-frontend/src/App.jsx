@@ -1,6 +1,6 @@
-import React, { useEffect } from "react";
+
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Toaster, toast } from "./utils/toast";
+import { Toaster} from "./utils/toast";
 import Navbar from "./components/Navbar";
 
 // Pages auth

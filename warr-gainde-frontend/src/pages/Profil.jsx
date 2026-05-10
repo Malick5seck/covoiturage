@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 
@@ -23,11 +23,10 @@ function Profil() {
   });
 
   const [photo, setPhoto] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(
-    user?.photo_profil
-      ? `http://localhost:8000/storage/${user.photo_profil}`
-      : null
-  );
+
+  // Initialise l'aperçu avec l'URL complète stockée (ou null)
+  const [photoPreview, setPhotoPreview] = useState(user?.photo_profil || null);
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
@@ -47,7 +46,7 @@ function Profil() {
     const file = e.target.files[0];
     if (file) {
       setPhoto(file);
-      setPhotoPreview(URL.createObjectURL(file)); // local preview
+      setPhotoPreview(URL.createObjectURL(file)); // aperçu local temporaire
     }
   };
 
@@ -57,31 +56,26 @@ function Profil() {
     setMessage({ type: '', text: '' });
 
     try {
-      // 1. Update text fields
+      // 1. Mettre à jour les champs texte
       const resInfos = await api.put('/profil', formData);
       let updatedUser = resInfos.data.user;
 
-      // 2. Upload photo if selected
+      // 2. Upload de la photo si une nouvelle a été choisie
       if (photo) {
         const photoData = new FormData();
         photoData.append('photo', photo);
-        
+
         const resPhoto = await api.post('/profil/photo', photoData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
-        
-        // The backend returns a full URL like http://.../storage/abc.jpg
-        // We store only the filename part (after /storage/)
-        updatedUser = {
-          ...updatedUser,
-          photo_profil: resPhoto.data.photo_url.split('/storage/')[1]
-        };
-        // Update the preview to the uploaded image (still using the local object URL is fine,
-        // but after success we could also set it to the new remote URL)
-        setPhotoPreview(`http://localhost:8000/storage/${updatedUser.photo_profil}`);
+
+        // L'API renvoie l'URL complète, on la stocke telle quelle
+        const photoUrl = resPhoto.data.photo_url;
+        updatedUser = { ...updatedUser, photo_profil: photoUrl };
+        setPhotoPreview(photoUrl); // remplace l'aperçu local par l'URL distante
       }
 
-      // 3. Change password if provided
+      // 3. Changement de mot de passe (si renseigné)
       if (passwordData.ancien_mot_de_passe || passwordData.nouveau_mot_de_passe) {
         if (passwordData.nouveau_mot_de_passe !== passwordData.nouveau_mot_de_passe_confirmation) {
           throw new Error("Les nouveaux mots de passe ne correspondent pas.");
@@ -90,19 +84,18 @@ function Profil() {
         setPasswordData({
           ancien_mot_de_passe: '',
           nouveau_mot_de_passe: '',
-          nouveau_mot_de_passe_confirmation: ''
+          nouveau_mot_de_passe_confirmation: '',
         });
       }
 
-      // Update localStorage and local state
+      // 4. Mettre à jour local storage et état local
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
       setMessage({ type: 'success', text: 'Profil mis à jour avec succès !' });
-
     } catch (err) {
       setMessage({
         type: 'error',
-        text: err.message || err.response?.data?.message || 'Erreur lors de la mise à jour.'
+        text: err.message || err.response?.data?.message || 'Erreur lors de la mise à jour.',
       });
     } finally {
       setLoading(false);
@@ -114,18 +107,20 @@ function Profil() {
   return (
     <div className="max-w-2xl mx-auto py-10 px-4">
       <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
-        
         <h1 className="text-3xl font-black text-gainde-dark mb-8">Mon Profil</h1>
 
         {message.text && (
-          <div className={`mb-6 p-4 rounded-xl font-bold ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+          <div
+            className={`mb-6 p-4 rounded-xl font-bold ${
+              message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+            }`}
+          >
             {message.text}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* PHOTO SECTION */}
+          {/* SECTION PHOTO */}
           <div className="flex flex-col items-center mb-8 pb-8 border-b border-gray-100">
             <div className="relative">
               <div className="w-32 h-32 rounded-full overflow-hidden bg-gray-200 border-4 border-white shadow-lg flex items-center justify-center text-4xl font-bold text-gray-400">
@@ -143,60 +138,94 @@ function Profil() {
             <p className="text-sm text-gray-500 mt-3">Cliquez sur l'icône pour modifier votre avatar</p>
           </div>
 
-          {/* USER INFO FIELDS */}
+          {/* INFOS UTILISATEUR */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Prénom</label>
-              <input type="text" name="prenom" required value={formData.prenom} onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none" />
+              <input
+                type="text"
+                name="prenom"
+                required
+                value={formData.prenom}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+              />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Nom</label>
-              <input type="text" name="nom" required value={formData.nom} onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none" />
+              <input
+                type="text"
+                name="nom"
+                required
+                value={formData.nom}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+              />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Téléphone</label>
-              <input type="tel" name="telephone" required value={formData.telephone} onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none" />
+              <input
+                type="tel"
+                name="telephone"
+                required
+                value={formData.telephone}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+              />
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-2">Email</label>
-              <input type="email" name="email" required value={formData.email} onChange={handleChange}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none bg-gray-50" />
+              <input
+                type="email"
+                name="email"
+                required
+                value={formData.email}
+                onChange={handleChange}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none bg-gray-50"
+              />
             </div>
           </div>
-          
-          {/* PASSWORD SECTION */}
+
+          {/* MOT DE PASSE */}
           <div className="mt-10 pt-8 border-t border-gray-100">
             <h3 className="font-bold text-gainde-dark mb-4">🔒 Changer de mot de passe</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Ancien mot de passe</label>
-                <input type="password" name="ancien_mot_de_passe" 
+                <input
+                  type="password"
+                  name="ancien_mot_de_passe"
                   value={passwordData.ancien_mot_de_passe}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none" 
-                  onChange={handlePasswordChange} />
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  onChange={handlePasswordChange}
+                />
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Nouveau mot de passe</label>
-                <input type="password" name="nouveau_mot_de_passe" 
+                <input
+                  type="password"
+                  name="nouveau_mot_de_passe"
                   value={passwordData.nouveau_mot_de_passe}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none" 
-                  onChange={handlePasswordChange} />
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  onChange={handlePasswordChange}
+                />
               </div>
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Confirmer le nouveau</label>
-                <input type="password" name="nouveau_mot_de_passe_confirmation" 
+                <input
+                  type="password"
+                  name="nouveau_mot_de_passe_confirmation"
                   value={passwordData.nouveau_mot_de_passe_confirmation}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none" 
-                  onChange={handlePasswordChange} />
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none"
+                  onChange={handlePasswordChange}
+                />
               </div>
             </div>
           </div>
 
           <button
-            type="submit" disabled={loading}
+            type="submit"
+            disabled={loading}
             className={`w-full py-4 rounded-xl font-bold text-lg transition shadow-lg mt-8 ${
               loading ? 'bg-gray-400 text-white cursor-not-allowed' : 'bg-gainde-dark text-white hover:bg-black'
             }`}
@@ -204,7 +233,6 @@ function Profil() {
             {loading ? 'Sauvegarde...' : 'Enregistrer les modifications'}
           </button>
         </form>
-
       </div>
     </div>
   );

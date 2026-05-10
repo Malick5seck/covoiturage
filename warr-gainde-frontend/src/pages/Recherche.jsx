@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import api from "../api/axios";
 import { toast } from "../utils/toast";
@@ -48,7 +48,7 @@ function Recherche() {
           params: { ville_depart: depart, ville_arrivee: arrivee, date: date },
         });
         setTrajets(response.data.data || response.data);
-      } catch (err) {
+      } catch {
         setError("Impossible de charger les trajets pour le moment.");
       } finally {
         setLoading(false);
@@ -172,7 +172,7 @@ function Recherche() {
         );
         toast.success("Position GPS capturée.");
       },
-      (err) => {
+      () => {
         toast.error(
           "Impossible de récupérer la position. Vérifiez les permissions GPS.",
         );

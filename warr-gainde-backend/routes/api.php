@@ -16,7 +16,6 @@ use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\UploadController;
 use App\Http\Controllers\Api\PositionGpsController;
 use App\Http\Controllers\Api\AdminController;
-use App\Http\Controllers\Api\FcmController;
 
 /*
 |--------------------------------------------------------------------------

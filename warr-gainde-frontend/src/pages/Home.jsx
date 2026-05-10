@@ -1,12 +1,11 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 
 function Home() {
   const navigate = useNavigate();
 
   const user = JSON.parse(localStorage.getItem("user"));
-  const isConnected = !!localStorage.getItem("token");
-  const isDriver = user && user.role === 'CHAUFFEUR';
+  const isDriver = user && user.role_actuel === "CHAUFFEUR"; // Correction : role_actuel
 
   const [searchData, setSearchData] = useState({
     depart: "",
@@ -23,7 +22,7 @@ function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* HERO SECTION - Fond Bleu de Nuit */}
+      {/* HERO SECTION */}
       <div className="bg-gainde-dark text-white pt-16 pb-20 px-4 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
 
@@ -145,7 +144,7 @@ function Home() {
         </div>
       </div>
 
-      {/* SECTION CALL TO ACTION - Conditionnée par isDriver */}
+      {/* SECTION CALL TO ACTION — réservée aux non-chauffeurs */}
       {!isDriver && (
         <div className="max-w-5xl mx-auto px-4 mb-20">
           <div className="bg-gainde-dark rounded-3xl p-10 md:p-16 flex flex-col md:flex-row items-center justify-between shadow-2xl">
@@ -163,11 +162,6 @@ function Home() {
             >
               Devenir chauffeur
             </Link>
-            {!isConnected && (
-              <div className="max-w-5xl mx-auto px-4 mb-20">
-                {/* ... le bloc "Vous avez une voiture ?" */}
-              </div>
-            )}
           </div>
         </div>
       )}

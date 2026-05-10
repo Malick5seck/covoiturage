@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { getUser } from '../utils/auth';
@@ -33,13 +33,7 @@ function MonVehicule() {
   // États pour les erreurs par champ
   const [fieldErrors, setFieldErrors] = useState({});
 
-  useEffect(() => {
-    if (!user) { navigate('/login'); return; }
-    if (user.role_actuel !== 'CHAUFFEUR') { navigate('/'); return; }
-    fetchVehicules();
-  }, []);
-
-  const fetchVehicules = async () => {
+  const fetchVehicules = useCallback(async () => {
     try {
       const res = await api.get('/vehicules');
       setVehicules(res.data.data || []);
@@ -48,7 +42,18 @@ function MonVehicule() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!user) { navigate('/login'); return; }
+    if (user.role_actuel !== 'CHAUFFEUR') { navigate('/'); return; }
+
+    const init = async () => {
+      await fetchVehicules();
+    };
+
+    init();
+  }, [fetchVehicules, navigate, user]);
 
   // Validation d'un champ
   const validateField = (name, value) => {

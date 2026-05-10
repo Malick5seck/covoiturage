@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import MapTracking from "../components/MapTracking";
@@ -75,7 +75,9 @@ function MesTrajets() {
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
           });
-        } catch {}
+        } catch (error) {
+          console.error("Error sending GPS location:", error);
+        }
       },
       (err) => console.error("GPS", err),
       { enableHighAccuracy: true },

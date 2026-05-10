@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { getUser, getToken, logout as authLogout } from '../utils/auth';
+import { getUser, logout as authLogout } from '../utils/auth';
 import { useNotificationsTempsReel } from '../hooks/UseNotificationsTempsReel';
 import NotificationToast from '../components/NotificationToast';
 import api from '../api/axios';
@@ -10,7 +10,6 @@ function Navbar() {
   const location   = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const token = getToken();
   const user  = getUser();
   const { nouvelleNotif } = useNotificationsTempsReel();
 
@@ -20,27 +19,40 @@ function Navbar() {
 
   // Badge notifications non lues
   const [badge, setBadge] = useState(0);
-
-  // Récupérer le compteur initial depuis l'API
-  const fetchBadge = useCallback(async () => {
-    if (!user) return;
-    try {
-      const res = await api.get('/notifications');
-      setBadge(res.data.non_lues_count || 0);
-    } catch {} // silencieux
-  }, [user]);
+  const prevNouvelleNotif = useRef(false);
 
   useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+
+    const fetchBadge = async () => {
+      try {
+        const res = await api.get('/notifications');
+        if (!cancelled) {
+          setBadge(res.data.non_lues_count || 0);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Failed fetching notifications:', error);
+        }
+      }
+    };
+
     fetchBadge();
-    const interval = setInterval(fetchBadge, 3000); // rafraîchir toutes les 3 secondes
-    return () => clearInterval(interval);
-  }, [fetchBadge]);
+    // plus de setInterval : le badge est mis à jour en temps réel via WebSocket
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Quand une nouvelle notification arrive en temps réel, incrémenter le badge
   useEffect(() => {
-    if (nouvelleNotif) {
+    if (nouvelleNotif && prevNouvelleNotif.current !== nouvelleNotif) {
       setBadge(prev => prev + 1);
     }
+    prevNouvelleNotif.current = nouvelleNotif;
   }, [nouvelleNotif]);
 
   const handleLogout = () => {
@@ -230,7 +242,7 @@ function Navbar() {
       </nav>
     </>
   );
-}
+
 
 // Composant lien mobile
 function NavMobileLink({ to, onClick, children, extraClass = '' }) {
@@ -240,6 +252,7 @@ function NavMobileLink({ to, onClick, children, extraClass = '' }) {
       {children}
     </Link>
   );
+}
 }
 
 export default Navbar;
