@@ -43,63 +43,281 @@ function SectionRecap({ stats }) {
   );
 }
 
-function SectionPassagers({ users, onBan }) {
-  const passagers = users.filter(u => u.role_actuel === 'PASSAGER');
-  return (
-    <div>
-      <h2 className="text-xl font-black text-gainde-dark mb-1">Gestion des passagers</h2>
-      <p className="text-gray-500 text-sm mb-6">{passagers.length} passager(s) inscrit(s).</p>
-      <UsersTable users={passagers} onBan={onBan} showStatut={false} />
-    </div>
-  );
-}
+// ─── SECTION PASSAGERS (modifiée : recherche, pagination, suspension avec motif) ───
+function SectionPassagers({ isSuperAdmin }) {
+  const [users, setUsers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [suspendUserId, setSuspendUserId] = useState(null);
+  const [motifSuspension, setMotifSuspension] = useState('');
+  const [dureeSuspension, setDureeSuspension] = useState(7);
+  const [submitting, setSubmitting] = useState(false);
+  const perPage = 20;
 
-function SectionConducteurs({ users, onBan, onChangeStatut }) {
-  const conducteurs = users.filter(u => u.role_actuel === 'CHAUFFEUR');
-  const statutColors = {
-    EN_ATTENTE: 'bg-yellow-100 text-yellow-700',
-    VALIDE:     'bg-green-100  text-green-700',
-    REFUSE:     'bg-red-100    text-red-600',
-    SUSPENDU:   'bg-orange-100 text-orange-700',
+  const charger = useCallback(async (p = 1) => {
+    setLoading(true);
+    try {
+      const res = await api.get('/admin/users', {
+        params: { page: p, role: 'PASSAGER', search: search || undefined },
+      });
+      setUsers(res.data.data || []);
+      setTotal(res.data.total || 0);
+      setPage(p);
+    } catch {
+      toast.error('Erreur de chargement.');
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
+
+  useEffect(() => { charger(1); }, [charger]);
+
+  const totalPages = Math.ceil(total / perPage);
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    charger(1);
+  };
+
+  const openSuspend = (id) => {
+    setSuspendUserId(id);
+    setMotifSuspension('');
+    setDureeSuspension(7);
+    setShowSuspendModal(true);
+  };
+
+  const confirmSuspend = async () => {
+    if (!motifSuspension.trim() || motifSuspension.trim().length < 3) {
+      toast.error('Motif requis (min. 3 caractères).');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.post(`/admin/users/${suspendUserId}/suspendre`, {
+        motif: motifSuspension.trim(),
+        duree: dureeSuspension,
+      });
+      toast.success('Utilisateur suspendu.');
+      setUsers(prev => prev.map(u => u.id === suspendUserId ? { ...u, statut_verification: 'SUSPENDU' } : u));
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Erreur.');
+    } finally {
+      setSubmitting(false);
+      setShowSuspendModal(false);
+      setSuspendUserId(null);
+    }
   };
 
   return (
     <div>
-      <h2 className="text-xl font-black text-gainde-dark mb-1">Gestion des conducteurs</h2>
-      <p className="text-gray-500 text-sm mb-6">{conducteurs.length} conducteur(s) inscrit(s).</p>
-      {conducteurs.length === 0 ? (
-        <EmptyState icon="🚗" text="Aucun conducteur inscrit." />
+      <h2 className="text-xl font-black text-gainde-dark mb-1">Gestion des passagers</h2>
+      <p className="text-gray-500 text-sm mb-6">{total} passager(s) inscrit(s).</p>
+
+      <form onSubmit={handleSearch} className="flex gap-3 mb-6">
+        <input type="text" placeholder="Rechercher par nom, téléphone, email..." value={search} onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none text-sm" />
+        <button type="submit" className="bg-gainde-yellow text-gainde-dark px-5 py-3 rounded-xl font-bold text-sm hover:bg-yellow-500 transition">🔍 Filtrer</button>
+      </form>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="animate-spin h-8 w-8 rounded-full border-3 border-gainde-yellow border-t-transparent" />
+        </div>
+      ) : users.length === 0 ? (
+        <EmptyState icon="👤" text="Aucun passager trouvé." />
       ) : (
-        <div className="grid gap-4">
-          {conducteurs.map((u) => (
-            <div key={u.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-gainde-dark text-white rounded-full flex items-center justify-center font-black text-lg">
-                  {u.prenom?.charAt(0)}
-                </div>
-                <div>
-                  <p className="font-black text-gainde-dark">{u.prenom} {u.nom}</p>
-                  <p className="text-sm text-gray-500">{u.telephone}</p>
-                  {u.numero_permis && <p className="text-xs text-gray-400 mt-0.5">Permis : {u.numero_permis}</p>}
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statutColors[u.statut_verification] || 'bg-gray-100 text-gray-600'}`}>
-                  {u.statut_verification || 'EN_ATTENTE'}
-                </span>
-                <button onClick={() => onChangeStatut(u.id, 'VALIDE')} className="bg-green-100 text-green-700 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-green-200 transition">✅ Valider</button>
-                <button onClick={() => onChangeStatut(u.id, 'SUSPENDU')} className="bg-orange-100 text-orange-700 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-orange-200 transition">⏸ Suspendre</button>
-                <button onClick={() => onChangeStatut(u.id, 'REFUSE')} className="bg-red-50 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-red-100 transition">❌ Refuser</button>
-                <button onClick={() => onBan(u.id)} className="bg-gray-50 text-gray-500 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-red-50 hover:text-red-600 transition">🚫 Bannir</button>
-              </div>
+        <>
+          <UsersTable users={users} showStatut={false} actionLabel="Suspendre" onAction={openSuspend} />
+          {totalPages > 1 && <Pagination page={page} totalPages={totalPages} onChange={charger} />}
+        </>
+      )}
+
+      {/* Modale suspension passager */}
+      {showSuspendModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
+            <button onClick={() => { setShowSuspendModal(false); setSuspendUserId(null); }} className="absolute top-4 right-4 w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-600">✕</button>
+            <h3 className="text-xl font-black text-gainde-dark mb-4">Suspendre le compte</h3>
+
+            <div className="mb-4">
+              <label className="block text-sm font-bold text-gray-700 mb-1">Motif <span className="text-red-500">*</span></label>
+              <textarea rows="3" required placeholder="Raison de la suspension..." className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none resize-none text-sm"
+                value={motifSuspension} onChange={(e) => setMotifSuspension(e.target.value)} />
+              <p className="text-xs text-gray-400 mt-1">Minimum 3 caractères</p>
             </div>
-          ))}
+
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-700 mb-1">Durée (jours) <span className="text-red-500">*</span></label>
+              <select value={dureeSuspension} onChange={(e) => setDureeSuspension(parseInt(e.target.value))}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none bg-white text-sm">
+                {[1, 3, 7, 14, 30, 90, 365].map(d => <option key={d} value={d}>{d} jour{d > 1 ? 's' : ''}</option>)}
+              </select>
+            </div>
+
+            <div className="flex gap-3">
+              <button onClick={() => { setShowSuspendModal(false); setSuspendUserId(null); }} className="flex-1 py-3 rounded-xl font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition">Annuler</button>
+              <button onClick={confirmSuspend} disabled={submitting} className={`flex-1 py-3 rounded-xl font-bold text-white transition ${submitting ? 'bg-gray-400' : 'bg-red-500 hover:bg-red-600'}`}>
+                {submitting ? 'Envoi...' : 'Confirmer la suspension'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 }
 
+// ─── SECTION CONDUCTEURS (modifiée : sans bouton Bannir, validation avec disparition, refus avec motif) ───
+function SectionConducteurs({ isSuperAdmin }) {
+  const [users, setUsers] = useState([]);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [showRefusModal, setShowRefusModal] = useState(false);
+  const [refusChauffeurId, setRefusChauffeurId] = useState(null);
+  const [motifRefus, setMotifRefus] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const perPage = 20;
+
+  const charger = useCallback(async (p = 1) => {
+    setLoading(true);
+    try {
+      const res = await api.get('/admin/users', {
+        params: { page: p, role: 'CHAUFFEUR', search: search || undefined },
+      });
+      setUsers(res.data.data || []);
+      setTotal(res.data.total || 0);
+      setPage(p);
+    } catch {
+      toast.error('Erreur de chargement.');
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
+
+  useEffect(() => { charger(1); }, [charger]);
+
+  const totalPages = Math.ceil(total / perPage);
+
+  const handleSearch = (e) => { e.preventDefault(); charger(1); };
+
+  const changeStatut = async (id, nouveauStatut, motif = null, duree = null) => {
+    try {
+      const payload = { nouveau_statut: nouveauStatut };
+      if (motif) payload.motif = motif;
+      if (duree) payload.duree = duree;
+      await api.post(`/admin/chauffeurs/${id}/statut`, payload);
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, statut_verification: nouveauStatut } : u));
+      toast.success('Statut mis à jour.');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Erreur.');
+    }
+  };
+
+  const openRefus = (id) => { setRefusChauffeurId(id); setMotifRefus(''); setShowRefusModal(true); };
+
+  const confirmRefus = async () => {
+    if (!motifRefus.trim() || motifRefus.trim().length < 3) { toast.error('Motif requis (min. 3 caractères).'); return; }
+    setSubmitting(true);
+    await changeStatut(refusChauffeurId, 'REFUSE', motifRefus.trim());
+    setSubmitting(false);
+    setShowRefusModal(false);
+    setRefusChauffeurId(null);
+  };
+
+  const statutColors = {
+    EN_ATTENTE: 'bg-yellow-100 text-yellow-700', VALIDE: 'bg-green-100 text-green-700',
+    REFUSE: 'bg-red-100 text-red-600', SUSPENDU: 'bg-orange-100 text-orange-700',
+  };
+
+  return (
+    <div>
+      <h2 className="text-xl font-black text-gainde-dark mb-1">Gestion des conducteurs</h2>
+      <p className="text-gray-500 text-sm mb-6">{total} conducteur(s) inscrit(s).</p>
+
+      <form onSubmit={handleSearch} className="flex gap-3 mb-6">
+        <input type="text" placeholder="Rechercher par nom, téléphone, email..." value={search} onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none text-sm" />
+        <button type="submit" className="bg-gainde-yellow text-gainde-dark px-5 py-3 rounded-xl font-bold text-sm hover:bg-yellow-500 transition">🔍 Filtrer</button>
+      </form>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <div className="animate-spin h-8 w-8 rounded-full border-3 border-gainde-yellow border-t-transparent" />
+        </div>
+      ) : users.length === 0 ? (
+        <EmptyState icon="🚗" text="Aucun conducteur trouvé." />
+      ) : (
+        <>
+          <div className="grid gap-4">
+            {users.map(u => (
+              <div key={u.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-gainde-dark text-white rounded-full flex items-center justify-center font-black text-lg">{u.prenom?.charAt(0)}</div>
+                  <div>
+                    <p className="font-black text-gainde-dark">{u.prenom} {u.nom}</p>
+                    <p className="text-sm text-gray-500">{u.telephone}</p>
+                    {u.numero_permis && <p className="text-xs text-gray-400 mt-0.5">Permis : {u.numero_permis}</p>}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${statutColors[u.statut_verification] || 'bg-gray-100 text-gray-600'}`}>
+                    {u.statut_verification || 'EN_ATTENTE'}
+                  </span>
+
+                  {u.statut_verification === 'EN_ATTENTE' && (
+                    <>
+                      <button onClick={() => changeStatut(u.id, 'VALIDE')} className="bg-green-100 text-green-700 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-green-200 transition">✅ Valider</button>
+                      <button onClick={() => openRefus(u.id)} className="bg-red-50 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-red-100 transition">❌ Refuser</button>
+                      <button onClick={() => changeStatut(u.id, 'SUSPENDU')} className="bg-orange-100 text-orange-700 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-orange-200 transition">⏸ Suspendre</button>
+                    </>
+                  )}
+
+                  {u.statut_verification === 'VALIDE' && (
+                    <button onClick={() => changeStatut(u.id, 'SUSPENDU')} className="bg-orange-100 text-orange-700 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-orange-200 transition">⏸ Suspendre</button>
+                  )}
+
+                  {(u.statut_verification === 'REFUSE' || u.statut_verification === 'SUSPENDU') && (
+                    <button onClick={() => changeStatut(u.id, 'VALIDE')} className="bg-green-100 text-green-700 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-green-200 transition">✅ Valider</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {totalPages > 1 && <Pagination page={page} totalPages={totalPages} onChange={charger} />}
+        </>
+      )}
+
+      {/* Modale motif de refus conducteur */}
+      {showRefusModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
+            <button onClick={() => { setShowRefusModal(false); setRefusChauffeurId(null); }} className="absolute top-4 right-4 w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-600">✕</button>
+            <h3 className="text-xl font-black text-gainde-dark mb-4">Motif du refus</h3>
+            <div className="mb-6">
+              <label className="block text-sm font-bold text-gray-700 mb-2">Motif <span className="text-red-500">*</span></label>
+              <textarea rows="3" required placeholder="Raison du refus..." className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none resize-none text-sm"
+                value={motifRefus} onChange={(e) => setMotifRefus(e.target.value)} />
+              <p className="text-xs text-gray-400 mt-1">Minimum 3 caractères</p>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => { setShowRefusModal(false); setRefusChauffeurId(null); }} className="flex-1 py-3 rounded-xl font-bold border border-gray-200 text-gray-600 hover:bg-gray-50 transition">Annuler</button>
+              <button onClick={confirmRefus} disabled={submitting} className={`flex-1 py-3 rounded-xl font-bold text-white transition ${submitting ? 'bg-gray-400' : 'bg-red-500 hover:bg-red-600'}`}>
+                {submitting ? 'Envoi...' : 'Confirmer le refus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SECTION MODÉRATEURS (inchangée) ──────────────────────────────────────
 function SectionModerateurs({ users, onBan, isSuperAdmin }) {
   const mods = users.filter(u => u.role_actuel === 'ADMIN' && u.niveau_accreditation === 'MODERATEUR');
   const [form, setForm]       = useState({ nom:'', prenom:'', telephone:'', email:'', password:'' });
@@ -152,6 +370,7 @@ function SectionModerateurs({ users, onBan, isSuperAdmin }) {
   );
 }
 
+// ─── SECTION FINANCES (inchangée) ─────────────────────────────────────────
 function SectionFinances({ stats, isSuperAdmin }) {
   const [taux, setTaux]   = useState('');
   const [msg, setMsg]     = useState({ type:'', text:'' });
@@ -220,14 +439,15 @@ function SectionFinances({ stats, isSuperAdmin }) {
   );
 }
 
-/* ─── NOUVEL ONGLET : JOURNAL D'AUDIT ──────────────────────────────────── */
+/* ─── SECTION AUDIT (modifiée : sans IP, sans suspension, recherche, pagination, détails lisibles) ─── */
 function SectionAuditLogs() {
   const [logs, setLogs]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage]       = useState(1);
   const [total, setTotal]     = useState(0);
   const [filtre, setFiltre]   = useState('');
-  const perPage = 30;
+  const [search, setSearch]   = useState('');
+  const perPage = 20;
 
   const actionLabels = {
     BAN_USER:              '🔨 Bannissement',
@@ -242,7 +462,7 @@ function SectionAuditLogs() {
     setLoading(true);
     try {
       const res = await api.get('/admin/audit-logs', {
-        params: { page: p, action: filtre || undefined },
+        params: { page: p, action: filtre || undefined, search: search || undefined },
       });
       setLogs(res.data.data || []);
       setTotal(res.data.total || 0);
@@ -252,11 +472,14 @@ function SectionAuditLogs() {
     } finally {
       setLoading(false);
     }
-  }, [filtre]);
+  }, [filtre, search]);
 
   useEffect(() => { charger(1); }, [charger]);
 
   const totalPages = Math.ceil(total / perPage);
+
+  // On exclut les logs de type SUSPEND_USER
+  const filteredLogs = logs.filter(log => log.action !== 'SUSPEND_USER');
 
   return (
     <div>
@@ -276,11 +499,17 @@ function SectionAuditLogs() {
         ))}
       </div>
 
+      <div className="flex gap-3 mb-6">
+        <input type="text" placeholder="Rechercher par administrateur, action..." value={search} onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:border-gainde-yellow outline-none text-sm" />
+        <button onClick={() => charger(1)} className="bg-gainde-yellow text-gainde-dark px-5 py-3 rounded-xl font-bold text-sm hover:bg-yellow-500 transition">🔍 Rechercher</button>
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center py-16">
           <div className="animate-spin h-8 w-8 rounded-full border-3 border-gainde-yellow border-t-transparent" />
         </div>
-      ) : logs.length === 0 ? (
+      ) : filteredLogs.length === 0 ? (
         <EmptyState icon="📜" text="Aucune action enregistrée." />
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -293,11 +522,10 @@ function SectionAuditLogs() {
                   <th className="px-5 py-4">Cible</th>
                   <th className="px-5 py-4">Détails</th>
                   <th className="px-5 py-4">Date</th>
-                  <th className="px-5 py-4">IP</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {logs.map(log => (
+                {filteredLogs.map(log => (
                   <tr key={log.id} className="hover:bg-gray-50 transition">
                     <td className="px-5 py-4 font-bold text-gainde-dark whitespace-nowrap">
                       {log.admin?.prenom} {log.admin?.nom}
@@ -310,21 +538,27 @@ function SectionAuditLogs() {
                         {actionLabels[log.action] || log.action}
                       </span>
                     </td>
-                    <td className="px-5 py-4 text-gray-500 text-xs">
-                      {log.target_type ? `${log.target_type} #${log.target_id ?? '—'}` : '—'}
+                    <td className="px-5 py-4 text-gray-700 text-sm font-medium">
+                      {log.target_type && log.target_id ? `${log.target_type} #${log.target_id}` : '—'}
+                      {log.details?.nom ? ` (${log.details.nom})` : ''}
+                      {log.details?.chauffeur ? ` (${log.details.chauffeur})` : ''}
                     </td>
-                    <td className="px-5 py-4 text-xs text-gray-400 max-w-[200px] truncate">
+                    <td className="px-5 py-4 text-xs text-gray-500 max-w-[250px]">
                       {log.details ? (
-                        <code className="bg-gray-50 px-1.5 py-0.5 rounded text-xs">
-                          {JSON.stringify(log.details)}
-                        </code>
+                        <div className="space-y-1">
+                          {log.details.ancien_statut && log.details.nouveau_statut && (
+                            <span>Statut : {log.details.ancien_statut} → {log.details.nouveau_statut}</span>
+                          )}
+                          {log.details.motif_refus && <span className="block text-red-600">Motif : {log.details.motif_refus}</span>}
+                          {log.details.motif && <span className="block">Motif : {log.details.motif}</span>}
+                          {log.details.duree_jours && <span className="block">Durée : {log.details.duree_jours} j</span>}
+                          {log.details.ancien_taux && log.details.nouveau_taux && <span>Taux : {log.details.ancien_taux}% → {log.details.nouveau_taux}%</span>}
+                          {log.details.moderateur && <span>Modérateur : {log.details.moderateur}</span>}
+                        </div>
                       ) : '—'}
                     </td>
                     <td className="px-5 py-4 text-xs text-gray-400 whitespace-nowrap">
                       {new Date(log.created_at).toLocaleString('fr-FR')}
-                    </td>
-                    <td className="px-5 py-4 text-xs text-gray-300 font-mono">
-                      {log.ip_address ?? '—'}
                     </td>
                   </tr>
                 ))}
@@ -355,8 +589,8 @@ function SectionAuditLogs() {
    UTILITAIRES PARTAGÉS
 ═══════════════════════════════════════════════════════════════════ */
 
-function UsersTable({ users, onBan, showStatut = true, roleLabel = null }) {
-  if (users.length === 0) return <EmptyState icon="👤" text="Aucun utilisateur dans cette catégorie." />;
+function UsersTable({ users, showStatut = true, actionLabel, onAction, roleLabel = null }) {
+  if (users.length === 0) return <EmptyState icon="👤" text="Aucun utilisateur." />;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
@@ -368,7 +602,7 @@ function UsersTable({ users, onBan, showStatut = true, roleLabel = null }) {
               <th className="px-5 py-4">Téléphone</th>
               <th className="px-5 py-4">Email</th>
               {showStatut && <th className="px-5 py-4">Statut</th>}
-              {onBan && <th className="px-5 py-4 text-center">Action</th>}
+              {onAction && <th className="px-5 py-4 text-center">Action</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -390,9 +624,11 @@ function UsersTable({ users, onBan, showStatut = true, roleLabel = null }) {
                     }`}>{u.statut_verification || '—'}</span>
                   </td>
                 )}
-                {onBan && (
+                {onAction && (
                   <td className="px-5 py-4 text-center">
-                    <button onClick={() => onBan(u.id)} className="bg-red-50 text-red-500 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-red-100 transition">🚫 Bannir</button>
+                    <button onClick={() => onAction(u.id)} className="bg-orange-50 text-orange-600 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-orange-100 transition">
+                      {actionLabel}
+                    </button>
                   </td>
                 )}
               </tr>
@@ -400,6 +636,16 @@ function UsersTable({ users, onBan, showStatut = true, roleLabel = null }) {
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function Pagination({ page, totalPages, onChange }) {
+  return (
+    <div className="flex justify-center gap-2 mt-6">
+      <button onClick={() => onChange(page - 1)} disabled={page <= 1} className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 disabled:opacity-40 transition">←</button>
+      <span className="px-4 py-2 rounded-xl bg-gainde-yellow text-gainde-dark font-bold">{page} / {totalPages}</span>
+      <button onClick={() => onChange(page + 1)} disabled={page >= totalPages} className="px-4 py-2 rounded-xl bg-gray-100 text-gray-600 font-bold hover:bg-gray-200 disabled:opacity-40 transition">→</button>
     </div>
   );
 }
@@ -450,6 +696,7 @@ function AdminDashboard() {
     })();
   }, [user, navigate]);
 
+  // ── Actions globales (utilisées uniquement par Moderateurs et Finances) ──
   const handleBan = async (id) => {
     const ok = await confirm({ title: 'Bannir l’utilisateur', message: 'Bannir définitivement cet utilisateur ?', confirmLabel: 'Bannir', danger: true });
     if (!ok) return;
@@ -472,7 +719,7 @@ function AdminDashboard() {
     }
   };
 
-  // ── Onglets dynamiques : finances et audit réservés au Super Admin ──
+  // ── Onglets dynamiques ───────────────────────────────────────────────────
   const tabs = [
     { id: 'dashboard',   label: '📊 Tableau de bord' },
     { id: 'passagers',   label: '🎒 Passagers'       },
@@ -526,8 +773,8 @@ function AdminDashboard() {
 
       <div className="min-h-[400px]">
         {onglet === 'dashboard'   && <SectionRecap stats={stats} />}
-        {onglet === 'passagers'   && <SectionPassagers users={usersList} onBan={handleBan} />}
-        {onglet === 'conducteurs' && <SectionConducteurs users={usersList} onBan={handleBan} onChangeStatut={handleChangeStatut} />}
+        {onglet === 'passagers'   && <SectionPassagers isSuperAdmin={isSuperAdmin} />}
+        {onglet === 'conducteurs' && <SectionConducteurs isSuperAdmin={isSuperAdmin} />}
         {onglet === 'moderateurs' && <SectionModerateurs users={usersList} onBan={handleBan} isSuperAdmin={isSuperAdmin} />}
         {onglet === 'finances'    && isSuperAdmin && <SectionFinances stats={stats} isSuperAdmin={isSuperAdmin} />}
         {onglet === 'audit'       && isSuperAdmin && <SectionAuditLogs />}

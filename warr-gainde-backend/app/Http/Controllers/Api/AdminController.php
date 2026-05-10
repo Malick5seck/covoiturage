@@ -13,10 +13,6 @@ use Illuminate\Http\JsonResponse;
 
 class AdminController extends Controller
 {
-    // =========================================================================
-    // HELPERS DE SÉCURITÉ
-    // =========================================================================
-
     private function checkAdmin(Request $request): ?JsonResponse
     {
         if (!$request->user() || !$request->user()->isAdmin()) {
@@ -39,16 +35,11 @@ class AdminController extends Controller
         return null;
     }
 
-    // =========================================================================
     // 1. TABLEAU DE BORD
-    // =========================================================================
-
     public function getDashboardStats(Request $request): JsonResponse
     {
         if ($response = $this->checkAdmin($request)) return $response;
-
         AdminAuditLog::log($request, 'VIEW_STATS');
-
         $stats = [
             'total_utilisateurs'        => User::count(),
             'total_chauffeurs'          => User::where('role_actuel', 'CHAUFFEUR')->count(),
@@ -64,39 +55,41 @@ class AdminController extends Controller
                                                       ->sum('montant'),
             'taux_commission_actuel'    => Setting::where('key', 'taux_commission')->value('value') ?? '5',
         ];
-
         return response()->json(['success' => true, 'data' => $stats]);
     }
 
-    // =========================================================================
-    // 2. MODÉRATION CHAUFFEURS
-    // =========================================================================
-
+    // 2. MODÉRATION CHAUFFEURS (avec motif pour le refus)
     public function changerStatutChauffeur(Request $request, $id): JsonResponse
     {
         if ($response = $this->checkAdmin($request)) return $response;
 
         $request->validate([
             'nouveau_statut' => 'required|in:VALIDE,REFUSE,SUSPENDU',
+            'motif'          => 'required_if:nouveau_statut,REFUSE|nullable|string|max:500',
+            'duree'          => 'nullable|integer|min:1',
         ]);
 
         $chauffeur = User::findOrFail($id);
-
         if (!$chauffeur->isConducteur()) {
-            return response()->json([
-                'success' => false,
-                'message' => "Cet utilisateur n'est pas un chauffeur.",
-            ], 400);
+            return response()->json(['success' => false, 'message' => "Cet utilisateur n'est pas un chauffeur."], 400);
         }
 
         $ancienStatut = $chauffeur->statut_verification;
         $chauffeur->update(['statut_verification' => $request->nouveau_statut]);
 
-        AdminAuditLog::log($request, 'CHANGE_DRIVER_STATUS', [
-            'chauffeur_nom'   => $chauffeur->prenom . ' ' . $chauffeur->nom,
-            'ancien_statut'   => $ancienStatut,
-            'nouveau_statut'  => $request->nouveau_statut,
-        ], 'User', (int) $id);
+        $details = [
+            'chauffeur'     => $chauffeur->prenom . ' ' . $chauffeur->nom,
+            'ancien_statut' => $ancienStatut,
+            'nouveau_statut'=> $request->nouveau_statut,
+        ];
+        if ($request->nouveau_statut === 'REFUSE') {
+            $details['motif_refus'] = $request->motif;
+        }
+        if ($request->filled('duree')) {
+            $details['duree_suspension_jours'] = $request->duree;
+        }
+
+        AdminAuditLog::log($request, 'CHANGE_DRIVER_STATUS', $details, 'User', (int) $id);
 
         return response()->json([
             'success'   => true,
@@ -110,28 +103,45 @@ class AdminController extends Controller
         ]);
     }
 
-    // =========================================================================
-    // 3. BANNISSEMENT
-    // =========================================================================
-
-    public function bannirUtilisateur(Request $request, $id): JsonResponse
+    // 3. SUSPENSION D'UN UTILISATEUR (passager ou autre)
+    public function suspendreUtilisateur(Request $request, $id): JsonResponse
     {
         if ($response = $this->checkAdmin($request)) return $response;
 
-        $user = User::findOrFail($id);
+        $request->validate([
+            'motif' => 'required|string|max:500',
+            'duree' => 'required|integer|min:1',
+        ]);
 
+        $user = User::findOrFail($id);
         if ($user->id === $request->user()->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Action impossible : vous ne pouvez pas vous bannir.',
-            ], 400);
+            return response()->json(['success' => false, 'message' => 'Vous ne pouvez pas vous suspendre.'], 400);
         }
 
-        if ($user->isAdmin() && !$request->user()->isSuperAdmin()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Seul le Super Administrateur peut bannir un admin.',
-            ], 403);
+        $user->update(['statut_verification' => 'SUSPENDU']);
+
+        AdminAuditLog::log($request, 'SUSPEND_USER', [
+            'nom'    => $user->prenom . ' ' . $user->nom,
+            'role'   => $user->role_actuel,
+            'motif'  => $request->motif,
+            'duree_jours' => $request->duree,
+        ], 'User', (int) $id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Utilisateur suspendu.',
+            'user'    => ['id' => $user->id, 'statut_verification' => $user->statut_verification],
+        ]);
+    }
+
+    // 4. BANNISSEMENT (réservé Super Admin)
+    public function bannirUtilisateur(Request $request, $id): JsonResponse
+    {
+        if ($response = $this->checkSuperAdmin($request)) return $response;
+
+        $user = User::findOrFail($id);
+        if ($user->id === $request->user()->id) {
+            return response()->json(['success' => false, 'message' => 'Action impossible.'], 400);
         }
 
         AdminAuditLog::log($request, 'BAN_USER', [
@@ -140,60 +150,49 @@ class AdminController extends Controller
             'role_actuel' => $user->role_actuel,
         ], 'User', (int) $id);
 
-        $user->delete(); // SoftDelete
-
-        return response()->json([
-            'success' => true,
-            'message' => "L'utilisateur a été banni de la plateforme.",
-        ]);
+        $user->delete();
+        return response()->json(['success' => true, 'message' => 'Utilisateur banni.']);
     }
 
-    // =========================================================================
-    // 4. COMMISSION
-    // =========================================================================
-
+    // 5. COMMISSION
     public function configurerTauxCommission(Request $request): JsonResponse
     {
         if ($response = $this->checkSuperAdmin($request)) return $response;
-
-        $request->validate([
-            'taux' => 'required|numeric|min:0|max:100',
-        ]);
-
+        $request->validate(['taux' => 'required|numeric|min:0|max:100']);
         $ancienTaux = Setting::where('key', 'taux_commission')->value('value');
-
-        Setting::updateOrCreate(
-            ['key' => 'taux_commission'],
-            ['value' => $request->taux]
-        );
-        Setting::updateOrCreate(
-            ['key' => 'taux_commission_modifie_par'],
-            ['value' => $request->user()->id . ' — ' . now()->toDateTimeString()]
-        );
-
-        AdminAuditLog::log($request, 'UPDATE_COMMISSION', [
-            'ancien_taux'   => $ancienTaux,
-            'nouveau_taux'  => $request->taux,
-        ], 'Setting');
-
-        return response()->json([
-            'success'      => true,
-            'message'      => 'Taux de commission mis à jour.',
-            'nouveau_taux' => $request->taux,
-        ]);
+        Setting::updateOrCreate(['key' => 'taux_commission'], ['value' => $request->taux]);
+        Setting::updateOrCreate(['key' => 'taux_commission_modifie_par'], ['value' => $request->user()->id . ' — ' . now()->toDateTimeString()]);
+        AdminAuditLog::log($request, 'UPDATE_COMMISSION', ['ancien_taux' => $ancienTaux, 'nouveau_taux' => $request->taux], 'Setting');
+        return response()->json(['success' => true, 'message' => 'Taux mis à jour.', 'nouveau_taux' => $request->taux]);
     }
 
-    // =========================================================================
-    // 5. LISTE DES UTILISATEURS
-    // =========================================================================
-
+    // 6. LISTE UTILISATEURS avec recherche et filtrage
     public function getUsers(Request $request): JsonResponse
     {
         if ($response = $this->checkAdmin($request)) return $response;
-
         AdminAuditLog::log($request, 'VIEW_USERS');
 
-        $users = User::orderBy('created_at', 'desc')->paginate(50);
+        $query = User::orderBy('created_at', 'desc');
+
+        if ($search = $request->input('search')) {
+            $words = explode(' ', $search);
+            $query->where(function ($q) use ($words) {
+                foreach ($words as $word) {
+                    $q->where(function ($sub) use ($word) {
+                        $sub->where('prenom', 'like', "%{$word}%")
+                            ->orWhere('nom', 'like', "%{$word}%")
+                            ->orWhere('telephone', 'like', "%{$word}%")
+                            ->orWhere('email', 'like', "%{$word}%");
+                    });
+                }
+            });
+        }
+
+        if ($role = $request->input('role')) {
+            $query->where('role_actuel', $role);
+        }
+
+        $users = $query->paginate(20);
 
         return response()->json([
             'success'      => true,
@@ -204,59 +203,32 @@ class AdminController extends Controller
         ]);
     }
 
-    // =========================================================================
-    // 6. AJOUTER UN MODÉRATEUR
-    // =========================================================================
-
+    // 7. AJOUTER MODÉRATEUR
     public function ajouterModerateur(Request $request): JsonResponse
     {
         if ($response = $this->checkSuperAdmin($request)) return $response;
-
         $validatedData = $request->validate([
-            'nom'       => 'required|string|max:255',
-            'prenom'    => 'required|string|max:255',
+            'nom' => 'required|string|max:255', 'prenom' => 'required|string|max:255',
             'telephone' => 'required|string|unique:users,telephone',
-            'email'     => 'required|string|email|unique:users,email',
-            'password'  => 'required|string|min:8',
+            'email' => 'required|string|email|unique:users,email',
+            'password' => 'required|string|min:8',
         ]);
-
         $moderateur = User::create([
-            'nom'                  => $validatedData['nom'],
-            'prenom'               => $validatedData['prenom'],
-            'telephone'            => $validatedData['telephone'],
-            'email'                => $validatedData['email'],
-            'password'             => bcrypt($validatedData['password']),
-            'role_actuel'          => 'ADMIN',
-            'niveau_accreditation' => 'MODERATEUR',
-            'statut_verification'  => 'VALIDE',
-            'solde_portefeuille'   => 0,
+            'nom' => $validatedData['nom'], 'prenom' => $validatedData['prenom'],
+            'telephone' => $validatedData['telephone'], 'email' => $validatedData['email'],
+            'password' => bcrypt($validatedData['password']),
+            'role_actuel' => 'ADMIN', 'niveau_accreditation' => 'MODERATEUR',
+            'statut_verification' => 'VALIDE', 'solde_portefeuille' => 0,
         ]);
-
         AdminAuditLog::log($request, 'CREATE_MODERATEUR', [
-            'moderateur_nom'       => $moderateur->prenom . ' ' . $moderateur->nom,
-            'moderateur_telephone' => $moderateur->telephone,
-            'moderateur_email'     => $moderateur->email,
+            'moderateur' => $moderateur->prenom . ' ' . $moderateur->nom,
+            'telephone'  => $moderateur->telephone,
+            'email'      => $moderateur->email,
         ], 'User', $moderateur->id);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Compte Modérateur créé.',
-            'data'    => [
-                'id'                   => $moderateur->id,
-                'prenom'               => $moderateur->prenom,
-                'nom'                  => $moderateur->nom,
-                'telephone'            => $moderateur->telephone,
-                'email'                => $moderateur->email,
-                'role_actuel'          => $moderateur->role_actuel,
-                'niveau_accreditation' => $moderateur->niveau_accreditation,
-            ],
-        ], 201);
+        return response()->json(['success' => true, 'message' => 'Modérateur créé.', 'data' => $moderateur], 201);
     }
 
-    // =========================================================================
-    // 7. AUDIT LOG — réservé Super Admin uniquement
-    // =========================================================================
-
+    // 8. AUDIT LOGS (recherche intégrée)
     public function getAuditLogs(Request $request): JsonResponse
     {
         if ($response = $this->checkSuperAdmin($request)) return $response;
@@ -264,20 +236,22 @@ class AdminController extends Controller
         $query = AdminAuditLog::with('admin:id,prenom,nom,niveau_accreditation')
                               ->orderBy('created_at', 'desc');
 
+        if ($search = $request->input('search')) {
+            // Recherche par nom d'admin ou détail JSON (simplifié)
+            $query->where(function ($q) use ($search) {
+                $q->whereHas('admin', function ($sub) use ($search) {
+                    $sub->where('prenom', 'like', "%{$search}%")
+                        ->orWhere('nom', 'like', "%{$search}%");
+                })->orWhere('action', 'like', "%{$search}%")
+                  ->orWhere('details', 'like', "%{$search}%");
+            });
+        }
+
         if ($request->filled('action')) {
             $query->where('action', $request->action);
         }
-        if ($request->filled('admin_id')) {
-            $query->where('admin_id', $request->admin_id);
-        }
-        if ($request->filled('date_debut')) {
-            $query->whereDate('created_at', '>=', $request->date_debut);
-        }
-        if ($request->filled('date_fin')) {
-            $query->whereDate('created_at', '<=', $request->date_fin);
-        }
 
-        $logs = $query->paginate(30);
+        $logs = $query->paginate(20);
 
         return response()->json([
             'success'      => true,

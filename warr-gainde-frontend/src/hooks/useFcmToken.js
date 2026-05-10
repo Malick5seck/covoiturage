@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { messaging, getToken, onMessage } from '../firebase';
 import api from '../api/axios';
 
-const VAPID_KEY = 'BAObvHevgbEIefy0FFhcYcvSF247mejwM9jE-zJ7_aQzG_yDuKy0oq2G2HnljqFv0CK1qyHMdLnGLOgLMfYAZ1Y';
+const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
 export default function useFcmToken() {
   const [fcmToken, setFcmToken] = useState(null);

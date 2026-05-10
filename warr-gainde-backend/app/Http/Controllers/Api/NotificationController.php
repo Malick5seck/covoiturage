@@ -11,7 +11,7 @@ use Illuminate\Http\Request;
 class NotificationController extends Controller
 {
     // =========================================================================
-    // LECTURE — liste des notifications de l'utilisateur connecté
+    // LECTURE — liste paginée des notifications de l'utilisateur connecté
     // =========================================================================
 
     public function index(Request $request): JsonResponse
@@ -20,14 +20,19 @@ class NotificationController extends Controller
 
         $notifications = Notification::where('user_id', $user->id)
                                       ->orderBy('created_at', 'desc')
-                                      ->get();
+                                      ->paginate(20);
 
-        $nonLuesCount = $notifications->whereNull('date_lecture')->count();
+        $nonLuesCount = Notification::where('user_id', $user->id)
+                                    ->whereNull('date_lecture')
+                                    ->count();
 
         return response()->json([
             'success'        => true,
-            'data'           => $notifications,
+            'data'           => $notifications->items(),
             'non_lues_count' => $nonLuesCount,
+            'total'          => $notifications->total(),
+            'current_page'   => $notifications->currentPage(),
+            'last_page'      => $notifications->lastPage(),
         ], 200);
     }
 

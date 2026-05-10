@@ -127,5 +127,6 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::post('/commission', [AdminController::class, 'configurerTauxCommission']);
         Route::post('/moderateurs', [AdminController::class, 'ajouterModerateur']);
         Route::get('/audit-logs', [AdminController::class, 'getAuditLogs']);
+        Route::post('/users/{id}/suspendre', [AdminController::class, 'suspendreUtilisateur']);
     });
 });

@@ -44,5 +44,8 @@ return [
         'token' => env('PAYDUNYA_TOKEN'),
         'mode' => env('PAYDUNYA_MODE', 'sandbox'),
     ],
+    'fcm' => [
+    'server_key' => env('FCM_SERVER_KEY'),
+],
 
 ];
