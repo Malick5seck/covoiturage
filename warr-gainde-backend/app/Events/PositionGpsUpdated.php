@@ -2,7 +2,7 @@
 
 namespace App\Events;
 
-use Illuminate\Broadcasting\Channel;
+use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -23,7 +23,7 @@ class PositionGpsUpdated implements ShouldBroadcastNow
     {
         // Canal public dédié à ce trajet
         return [
-            new Channel("trajet.{$this->trajet_id}"),
+            new PrivateChannel("trajet.{$this->trajet_id}"),
         ];
     }
 

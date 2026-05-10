@@ -89,12 +89,13 @@ class TrajetController extends Controller
         }
 
         $request->validate([
-            'ville_depart'  => 'required|string|max:255',
-            'ville_arrivee' => 'required|string|max:255',
-            'date_depart'   => 'required|date|after_or_equal:today',
-            'heure_depart'  => 'required',
-            'prix_place'    => 'required|numeric|min:500',
-            'vehicule_id'   => 'required|exists:vehicules,id',
+            'ville_depart'       => 'required|string|max:255',
+            'ville_arrivee'      => 'required|string|max:255',
+            'date_depart'        => 'required|date|after_or_equal:today',
+            'heure_depart'       => 'required',
+            'prix_place'         => 'required|numeric|min:500',
+            'vehicule_id'        => 'required|exists:vehicules,id',
+            'point_embarquement' => 'required|string|max:255',
         ]);
 
         $vehicule = Vehicule::where('id', $request->vehicule_id)
@@ -110,11 +111,6 @@ class TrajetController extends Controller
 
         $tauxActuel = (float) (Setting::where('key', 'taux_commission')->value('value') ?? 5);
 
-        // =====================================================================
-        // VÉRIFICATION DU SOLDE CÔTÉ BACKEND
-        // Commission maximale théorique = prix * places_max * taux
-        // On bloque si le solde ne couvre pas ce pire cas.
-        // =====================================================================
         $commissionMax = round(
             $request->prix_place * $vehicule->nombre_places_max * ($tauxActuel / 100),
             2
@@ -144,6 +140,9 @@ class TrajetController extends Controller
             'places_disponibles'       => $vehicule->nombre_places_max,
             'statut'                   => 'EN_ATTENTE',
             'taux_commission_applique' => $tauxActuel,
+            'point_embarquement_nom'   => $request->point_embarquement,
+            'point_embarquement_lat'   => $request->point_embarquement_lat ?? null,
+            'point_embarquement_long'  => $request->point_embarquement_long ?? null,
         ]);
 
         return response()->json([
@@ -190,9 +189,6 @@ class TrajetController extends Controller
             'heure_depart_reelle' => now(),
         ]);
 
-        // =====================================================================
-        // NOTIFICATION : Passagers acceptés — le trajet vient de démarrer
-        // =====================================================================
         $passagersAcceptes = Reservation::where('trajet_id', $trajet->id)
                                         ->where('statut', 'ACCEPTEE')
                                         ->pluck('passager_id');
@@ -233,7 +229,6 @@ class TrajetController extends Controller
             ], 400);
         }
 
-        // CORRECTION : utiliser le compteur cumulatif pour la commission
         $placesOccupees = (int) $trajet->total_passagers_cumules;
 
         try {
@@ -243,7 +238,8 @@ class TrajetController extends Controller
                     'heure_arrivee_reelle' => now(),
                 ]);
 
-                PositionGps::where('trajet_id', $trajet->id)->delete();
+                // ✅ Correction : archiver au lieu de supprimer
+                PositionGps::archiverPourTrajet($trajet->id);
 
                 $passagersAcceptes = Reservation::where('trajet_id', $trajet->id)
                     ->where('statut', 'ACCEPTEE')
@@ -298,6 +294,7 @@ class TrajetController extends Controller
             ], $status);
         }
     }
+
     // =========================================================================
     // ANNULER — Cascade réservations + Notifie tous les passagers concernés
     // =========================================================================
@@ -319,18 +316,15 @@ class TrajetController extends Controller
                 ], 400);
             }
 
-            // 1. Récupérer les passagers à notifier AVANT l'annulation en cascade
-            //    On notifie ceux EN_ATTENTE et ACCEPTEE (les deux sont impactés)
             $passagersANotifier = Reservation::where('trajet_id', $trajet->id)
                                              ->whereIn('statut', ['EN_ATTENTE', 'ACCEPTEE'])
                                              ->pluck('passager_id');
 
-            // 2. Passer le trajet en ANNULE
             $trajet->update(['statut' => 'ANNULE']);
 
-            PositionGps::where('trajet_id', $trajet->id)->delete();
+            // ✅ Correction : archiver au lieu de supprimer
+            PositionGps::archiverPourTrajet($trajet->id);
 
-            // 3. Annulation en cascade de toutes les réservations actives
             $trajet->reservations()
                    ->whereIn('statut', ['EN_ATTENTE', 'ACCEPTEE'])
                    ->update([
@@ -338,9 +332,6 @@ class TrajetController extends Controller
                        'motif_annulation'  => 'Trajet annulé par le conducteur',
                    ]);
 
-            // =====================================================================
-            // NOTIFICATION : Tous les passagers concernés (EN_ATTENTE + ACCEPTEE)
-            // =====================================================================
             foreach ($passagersANotifier as $passagerId) {
                 NotificationController::creer(
                     $passagerId,
@@ -402,7 +393,6 @@ class TrajetController extends Controller
         }
 
         $trajet->decrement('places_disponibles', $request->nombre_places);
-        // INCIDENTER LE COMPTEUR CUMULATIF POUR LA COMMISSION
         $trajet->increment('total_passagers_cumules', $request->nombre_places);
 
         return response()->json([
@@ -430,7 +420,6 @@ class TrajetController extends Controller
             ], 400);
         }
 
-        // On ne décrémente PAS total_passagers_cumules : le passager descend, mais il a bien été transporté
         $trajet->increment('places_disponibles', $request->nombre_places);
 
         return response()->json([

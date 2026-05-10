@@ -188,9 +188,12 @@ function MonVehicule() {
         text: vehiculeId ? 'Véhicule mis à jour avec succès !' : 'Véhicule enregistré avec succès !',
       });
 
-      if (!vehiculeId) setVehiculeId(newId);
-
       await fetchVehicules();
+
+      // ✅ Réinitialisation du formulaire après un nouvel enregistrement
+      if (!vehiculeId) {
+        resetForm();
+      }
     } catch (err) {
       const errorMsg = err.response?.data?.errors
         ? Object.values(err.response.data.errors).flat()[0]

@@ -34,14 +34,12 @@ class PositionGpsController extends Controller
             'longitude' => 'required|numeric',
         ]);
 
-        // Sauvegarde en BDD (points EN_COURS, supprimés à la fin du trajet)
         PositionGps::create([
             'trajet_id' => $trajetId,
             'latitude'  => $request->latitude,
             'longitude' => $request->longitude,
         ]);
 
-        // Broadcast WebSocket vers tous les passagers connectés à ce canal
         broadcast(new PositionGpsUpdated(
             trajet_id:  (int) $trajetId,
             latitude:   (float) $request->latitude,
@@ -118,13 +116,16 @@ class PositionGpsController extends Controller
             return response()->json(['success' => false, 'message' => 'Accès refusé.'], 403);
         }
 
-        if ($trajet->statut !== 'EN_COURS') {
-            return response()->json(['success' => true, 'data' => []]);
-        }
+        // ✅ Correction : ne plus bloquer pour les trajets terminés
+        $query = PositionGps::where('trajet_id', $trajetId);
 
-        $points = PositionGps::where('trajet_id', $trajetId)
-            ->where('statut_trajet', 'EN_COURS')
-            ->orderBy('date_position', 'asc')
+        // Pour un trajet en cours, on ne prend que les points actifs
+        if ($trajet->statut === 'EN_COURS') {
+            $query->where('statut_trajet', 'EN_COURS');
+        }
+        // Pour un trajet terminé ou annulé, on prend tous les points (y compris les archivés)
+
+        $points = $query->orderBy('date_position', 'asc')
             ->get(['latitude', 'longitude', 'date_position']);
 
         return response()->json(['success' => true, 'data' => $points]);

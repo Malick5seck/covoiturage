@@ -120,7 +120,6 @@ function Recherche() {
   // Ouvre la modale de réservation avancée
   const handleOpenReservation = (trajet) => {
     if (!user) {
-      // Redirige vers la page de connexion et sauvegarde l'URL actuelle
       navigate("/login", { state: { from: location } });
       return;
     }
@@ -132,9 +131,10 @@ function Recherche() {
       nom_passager_tiers: "",
       tel_passager_tiers: "",
       est_privatisee: false,
-      point_embarquement_nom: "",
-      point_embarquement_lat: "",
-      point_embarquement_long: "",
+      // Pré-remplissage avec le point d'embarquement défini par le chauffeur
+      point_embarquement_nom: trajet.point_embarquement_nom || "",
+      point_embarquement_lat: trajet.point_embarquement_lat || "",
+      point_embarquement_long: trajet.point_embarquement_long || "",
     });
     setShowResaModal(true);
   };

@@ -51,7 +51,7 @@ function MapTracking({ trajetId }) {
       .finally(() => setLoading(false));
 
     // 2. S'abonner au canal WebSocket Reverb
-    channelRef.current = echo.channel(`trajet.${trajetId}`);
+    channelRef.current = echo.private(`trajet.${trajetId}`);
 
     channelRef.current
       .listen('.position.updated', (data) => {

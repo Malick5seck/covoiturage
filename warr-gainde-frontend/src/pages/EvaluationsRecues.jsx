@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import { getUser } from '../utils/auth';
@@ -86,13 +86,7 @@ function EvaluationsRecues() {
   const [total, setTotal] = useState(0);
   const [filtre, setFiltre] = useState('tout');
 
-  useEffect(() => {
-    if (!user) { navigate('/login'); return; }
-    if (user.role_actuel !== 'CHAUFFEUR') { navigate('/'); return; }
-    chargerEvaluations(1);
-  }, [user]);
-
-  const chargerEvaluations = async (p) => {
+  const chargerEvaluations = React.useCallback(async (p) => {
     setLoading(true);
     setError('');
     try {
@@ -105,7 +99,18 @@ function EvaluationsRecues() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) { navigate('/login'); return; }
+    if (user.role_actuel !== 'CHAUFFEUR') { navigate('/'); return; }
+
+    const initialFetch = async () => {
+      await chargerEvaluations(1);
+    };
+
+    initialFetch();
+  }, [user, navigate, chargerEvaluations]);
 
   const evalsFiltrees = filtre === 'tout'
     ? evaluations
@@ -275,7 +280,7 @@ function EvaluationsRecues() {
       )}
 
       {/* PAGINATION */}
-      {total > 10 && (
+     {total > 10 && (
         <div className="flex justify-center gap-3 mt-8">
           <button
             onClick={() => chargerEvaluations(page - 1)}

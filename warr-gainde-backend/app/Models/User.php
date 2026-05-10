@@ -185,9 +185,5 @@ class User extends Authenticatable implements CanResetPasswordContract
         return $this->notifications()->whereNull('date_lecture')->count();
     }
 
-    public function fcmTokens()
-{
-    return $this->hasMany(FcmToken::class);
-}
   
 }

@@ -64,10 +64,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::apiResource('vehicules', VehiculeController::class);
     Route::post('/vehicules/{id}/photo', [UploadController::class, 'uploadPhotoVehicule']);
     Route::post('/user/photo', [UploadController::class, 'uploadPhotoProfil']);
-    // FCM Tokens
-    Route::post('/fcm-token', [FcmController::class, 'store']);
-    Route::delete('/fcm-token', [FcmController::class, 'destroy']);
-
+ 
     // -------------------------------------------------------------------------
     // TRAJETS (CHAUFFEUR)
     // -------------------------------------------------------------------------
@@ -99,7 +96,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
     // -------------------------------------------------------------------------
     // ÉVALUATIONS
     // -------------------------------------------------------------------------
-    Route::post('/chauffeurs/{id}/evaluations', [EvaluationController::class, 'store']);
+    Route::post('/trajets/{id}/evaluations', [EvaluationController::class, 'store']);
     Route::get('/mes-evaluations', [EvaluationController::class, 'mesEvaluations']);
 
     // -------------------------------------------------------------------------

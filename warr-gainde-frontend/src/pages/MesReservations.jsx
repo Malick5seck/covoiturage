@@ -201,6 +201,19 @@ function MesReservations() {
                     </div>
                   </div>
 
+                  {/* Photo du véhicule (ajoutée ici) */}
+                  {trajet?.vehicule?.photo_vehicule && (
+                    <div className="mt-3">
+                      <div className="w-full h-40 rounded-xl overflow-hidden border border-gray-200">
+                        <img
+                          src={trajet.vehicule.photo_vehicule}
+                          alt="Véhicule"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   {/* GPS EN DIRECT */}
                   {isEnCours && (
                     <div className="mt-2 pt-4 border-t border-gray-100">
@@ -245,7 +258,7 @@ function MesReservations() {
         </div>
       )}
 
-      {/* MODALE ÉVALUATION */}
+      {/* MODALE ÉVALUATION (inchangée) */}
       {showReviewModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl relative">
@@ -290,7 +303,7 @@ function MesReservations() {
         </div>
       )}
 
-      {/* MODALE MOTIF D'ANNULATION */}
+      {/* MODALE MOTIF D'ANNULATION (inchangée) */}
       {showAnnulerModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
           <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-2xl relative">

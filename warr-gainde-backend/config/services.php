@@ -6,12 +6,6 @@ return [
     |--------------------------------------------------------------------------
     | Third Party Services
     |--------------------------------------------------------------------------
-    |
-    | This file is for storing the credentials for third party services such
-    | as Mailgun, Postmark, AWS and more. This file provides the de facto
-    | location for this type of information, allowing packages to have
-    | a conventional file to locate the various service credentials.
-    |
     */
 
     'postmark' => [
@@ -34,18 +28,12 @@ return [
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
     ],
-    /*
-    | PayDunya — PAYDUNYA_MODE=sandbox utilise sandbox-api (clés de test publiques).
-    | En production : PAYDUNYA_MODE=production + clés réelles du tableau de bord.
-    */
+
     'paydunya' => [
         'master_key' => env('PAYDUNYA_MASTER_KEY'),
         'private_key' => env('PAYDUNYA_PRIVATE_KEY'),
         'token' => env('PAYDUNYA_TOKEN'),
         'mode' => env('PAYDUNYA_MODE', 'sandbox'),
     ],
-    'fcm' => [
-    'server_key' => env('FCM_SERVER_KEY'),
-],
 
 ];
