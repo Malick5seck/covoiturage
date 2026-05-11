@@ -37,7 +37,6 @@ function DemandesRecues() {
     fetchDemandes();
   }, [user, navigate]);
 
-  // ── Accepter directement ──────────────────────────────────────────────────
   const handleAccepter = async (reservationId) => {
     try {
       const res = await api.post(`/reservations/${reservationId}/accepter`);
@@ -52,14 +51,12 @@ function DemandesRecues() {
     }
   };
 
-  // ── Ouvrir la modale de refus ────────────────────────────────────────────
   const handleOpenRefus = (id) => {
     setRefusReservationId(id);
     setMotifRefus("");
     setShowRefusModal(true);
   };
 
-  // ── Confirmer le refus avec motif ─────────────────────────────────────────
   const handleConfirmerRefus = async () => {
     if (!motifRefus.trim() || motifRefus.trim().length < 3) {
       toast.error("Veuillez indiquer un motif d'au moins 3 caractères.");
@@ -200,15 +197,15 @@ function DemandesRecues() {
                       {demande.trajet?.date_heure_depart?.substring(11, 16)}
                     </p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-black text-gainde-dark text-lg">
-                      {parseInt(
-                        demande.trajet?.prix_par_place || 0,
-                      ).toLocaleString("fr-FR")}{" "}
-                      FCFA
-                    </p>
-                    <p className="text-xs text-gray-400">par place</p>
-                  </div>
+                  {parseInt(demande.trajet?.prix_par_place || 0) > 0 && (
+                    <div className="text-right shrink-0">
+                      <p className="font-black text-gainde-dark text-lg">
+                        {parseInt(demande.trajet?.prix_par_place).toLocaleString("fr-FR")}{" "}
+                        FCFA
+                      </p>
+                      <p className="text-xs text-gray-400">par place</p>
+                    </div>
+                  )}
                 </div>
 
                 {/* DÉTAILS RÉSERVATION */}
@@ -221,12 +218,12 @@ function DemandesRecues() {
                       📍 Embarquement en route
                     </span>
                   )}
-                  {demande.est_pour_un_tiers && (
+                  {!!demande.est_pour_un_tiers && (
                     <span className="bg-orange-50 text-orange-700 font-bold px-3 py-1.5 rounded-xl">
                       👤 Pour un tiers : {demande.nom_passager_tiers}
                     </span>
                   )}
-                  {demande.est_privatisee && (
+                  {!!demande.est_privatisee && (
                     <span className="bg-pink-50 text-pink-700 font-bold px-3 py-1.5 rounded-xl">
                       🔒 Privatisation
                     </span>

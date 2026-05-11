@@ -27,7 +27,7 @@ class ForgotPasswordController extends Controller
         }
 
         // Générer le token manuellement
-        $token = Password::broker()->createToken($user);
+        $token = Password::createToken($user);
 
         // Construire l'URL de réinitialisation
         $frontendUrl = rtrim(config('app.frontend_url', 'http://localhost:5173'), '/');
