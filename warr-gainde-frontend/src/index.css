@@ -2,7 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
-/* On applique notre gris clair en fond et notre texte sombre par défaut */
 body {
-  @apply bg-gainde-gray text-gainde-dark antialiased;
+    background-color: #F3F4F6;   /* gainde-gray */
+    color: #111827;              /* gainde-dark */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+/* Amélioration des boutons sur mobile */
+@media (max-width: 640px) {
+  button, 
+  a[role="button"],
+  .btn {
+    min-height: 44px;       /* Taille minimum pour le toucher */
+    min-width: 44px;
+    white-space: nowrap;
+  }
+
+  /* Empêche les boutons de se chevaucher */
+  .flex-wrap-mobile {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* Boutons en pleine largeur sur mobile */
+  .btn-full-mobile {
+    width: 100%;
+    justify-content: center;
+  }
 }
