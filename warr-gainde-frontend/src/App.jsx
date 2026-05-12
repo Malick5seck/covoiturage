@@ -2,6 +2,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster} from "./utils/toast";
 import Navbar from "./components/Navbar";
+import Footer from "./components/Footer";
 
 // Pages auth
 import Login    from "./pages/Login";
@@ -94,7 +95,10 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+
+       <Footer />
     </BrowserRouter>
+     
   );
 }
 
