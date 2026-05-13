@@ -249,14 +249,23 @@ function MonVehicule() {
                 : 'Enregistrez votre véhicule pour publier des trajets.'}
             </p>
           </div>
-          {vehiculeId && (
+          <div className="flex items-center gap-2">
+            {/* Bouton Retour */}
             <button
-              onClick={resetForm}
-              className="text-sm font-bold text-gray-400 hover:text-gainde-dark bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-xl transition"
-            >
-              ➕ Nouveau
+              onClick={() => navigate('/mes-trajets')}
+              className="bg-gainde-dark text-white text-sm font-bold px-4 py-2.5 rounded-xl transition hover:bg-black flex items-center gap-1.5 shadow-sm"
+        >
+               Retour
             </button>
-          )}
+            {vehiculeId && (
+              <button
+                onClick={resetForm}
+                className="text-sm font-bold text-gray-400 hover:text-gainde-dark bg-gray-100 hover:bg-gray-200 px-4 py-2 rounded-xl transition"
+              >
+                ➕ Nouveau
+              </button>
+            )}
+          </div>
         </div>
 
         {message.text && (

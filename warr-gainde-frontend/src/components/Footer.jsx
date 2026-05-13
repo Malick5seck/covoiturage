@@ -1,6 +1,6 @@
 export default function Footer() {
   return (
-    <footer className="bg-gainde-dark text-white py-6 px-4 text-center mt-auto w-full">
+    <footer className="hidden md:block bg-gainde-dark text-white py-6 px-4 text-center mt-auto w-full">
       <div className="max-w-7xl mx-auto">
         <p className="text-sm md:text-base font-medium">
           © {new Date().getFullYear()} — Warr Gaïndé

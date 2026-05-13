@@ -2,29 +2,80 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Base ────────────────────────────────────────────────────────────── */
+
 body {
-    background-color: #F3F4F6;   /* gainde-gray */
-    color: #111827;              /* gainde-dark */
+    background-color: #F3F4F6;
+    color: #111827;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    max-width: 100vw;
 }
-/* Amélioration des boutons sur mobile */
-@media (max-width: 640px) {
-  button, 
-  a[role="button"],
-  .btn {
-    min-height: 44px;       /* Taille minimum pour le toucher */
-    min-width: 44px;
-    white-space: nowrap;
+
+/* ─── Responsive typography ────────────────────────────────────────────
+   Ces règles viennent APRÈS @tailwind utilities → elles gagnent la
+   cascade à égalité de spécificité, sans !important.
+   Les classes responsives (md:text-6xl, sm:text-3xl…) ne sont pas
+   affectées car elles s'appliquent dans des media queries min-width
+   qui ne chevauchent pas ce max-width:639px.
+─────────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 639px) {
+
+  .text-2xl {
+    font-size: 1.25rem;
+    line-height: 1.75rem;
   }
 
-  /* Empêche les boutons de se chevaucher */
+  .text-3xl {
+    font-size: 1.5rem;
+    line-height: 2rem;
+  }
+
+  .text-4xl {
+    font-size: 1.875rem;
+    line-height: 2.25rem;
+  }
+
+  .text-5xl {
+    font-size: 2.25rem;
+    line-height: 2.5rem;
+  }
+
+  .text-6xl {
+    font-size: 2.5rem;
+    line-height: 2.75rem;
+  }
+
+  .text-7xl,
+  .text-8xl,
+  .text-9xl {
+    font-size: 2.5rem;
+    line-height: 2.75rem;
+  }
+}
+
+/* ─── Mobile button accessibility + size reduction ────────────────── */
+@media (max-width: 640px) {
+  button,
+  a[role="button"],
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+    white-space: nowrap;
+    font-size: 0.875rem !important;     /* text-sm */
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.5rem !important;
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
   .flex-wrap-mobile {
     flex-wrap: wrap;
     gap: 0.5rem;
   }
 
-  /* Boutons en pleine largeur sur mobile */
   .btn-full-mobile {
     width: 100%;
     justify-content: center;

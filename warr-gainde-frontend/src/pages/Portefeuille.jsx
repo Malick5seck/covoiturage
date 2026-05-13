@@ -1,4 +1,4 @@
-import{ useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../api/axios';
 
@@ -95,11 +95,20 @@ function Portefeuille() {
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-4">
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-gainde-dark">Mon Portefeuille</h1>
-        <p className="text-gray-500 mt-2">
-          Rechargez votre solde pour couvrir les commissions de la plateforme.
-        </p>
+      {/* En‑tête avec bouton de retour */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-gainde-dark">Mon Portefeuille</h1>
+          <p className="text-gray-500 mt-2">
+            Rechargez votre solde pour couvrir les commissions de la plateforme.
+          </p>
+        </div>
+        <button
+          onClick={() => navigate('/mes-trajets')}
+          className="bg-gainde-dark text-white text-sm font-bold px-4 py-2.5 rounded-xl transition hover:bg-black flex items-center gap-1.5 shadow-sm"
+        >
+          Mes trajets
+        </button>
       </div>
 
       {message.text && (
