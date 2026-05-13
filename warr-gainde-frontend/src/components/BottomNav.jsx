@@ -1,37 +1,40 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { getUser } from '../utils/auth';
 import api from '../api/axios';
 
-/* ─── Définition des onglets par rôle ─────────────────────────────────── */
-
+/* ─── Onglets par rôle ─────────────────────────────────────────────────
+   CHAUFFEUR : 5 onglets (Publier centré en 3ᵉ position)
+   PASSAGER  : 5 onglets
+   ADMIN     : 4 onglets
+   GUEST     : 4 onglets
+──────────────────────────────────────────────────────────────────────── */
 const tabsByRole = {
   PASSAGER: [
-    { to: '/',                label: 'Accueil',       icon: HomeIcon       },
-    { to: '/recherche',       label: 'Rechercher',    icon: SearchIcon     },
-    { to: '/mes-reservations',label: 'Réservations',  icon: TicketIcon     },
-    { to: '/notifications',   label: 'Alertes',       icon: BellIcon, badge: true },
-    { to: '/profil',          label: 'Profil',        icon: UserIcon       },
+    { to: '/',                 label: 'Accueil',      icon: HomeIcon        },
+    { to: '/recherche',        label: 'Rechercher',   icon: SearchIcon      },
+    { to: '/mes-reservations', label: 'Réservations', icon: TicketIcon      },
+    { to: '/notifications',    label: 'Alertes',      icon: BellIcon,  badge: true },
+    { to: '/profil',           label: 'Profil',       icon: UserIcon        },
   ],
   CHAUFFEUR: [
-    { to: '/',                label: 'Accueil',       icon: HomeIcon       },
-    { to: '/mes-trajets',     label: 'Trajets',       icon: RouteIcon      },
-    { to: '/publier',         label: 'Publier',       icon: PlusIcon, highlight: true },
-    { to: '/demandes-recues', label: 'Demandes',      icon: InboxIcon      },
-    { to: '/portefeuille',    label: 'Wallet',        icon: WalletIcon     },
-    { to: '/profil',          label: 'Profil',        icon: UserIcon       },
+    { to: '/',                 label: 'Accueil',      icon: HomeIcon        },
+    { to: '/mes-trajets',      label: 'Trajets',      icon: RouteIcon       },
+    { to: '/publier',          label: 'Publier',      icon: PlusIcon,  highlight: true },
+    { to: '/demandes-recues',  label: 'Demandes',     icon: InboxIcon       },
+    { to: '/profil',           label: 'Profil',       icon: UserIcon        },
   ],
   ADMIN: [
-    { to: '/',                label: 'Accueil',       icon: HomeIcon       },
-    { to: '/admin',           label: 'Admin',         icon: ShieldIcon     },
-    { to: '/notifications',   label: 'Alertes',       icon: BellIcon, badge: true },
-    { to: '/profil',          label: 'Profil',        icon: UserIcon       },
+    { to: '/',                 label: 'Accueil',      icon: HomeIcon        },
+    { to: '/admin',            label: 'Admin',        icon: ShieldIcon      },
+    { to: '/notifications',    label: 'Alertes',      icon: BellIcon,  badge: true },
+    { to: '/profil',           label: 'Profil',       icon: UserIcon        },
   ],
   GUEST: [
-    { to: '/',                label: 'Accueil',       icon: HomeIcon       },
-    { to: '/recherche',       label: 'Rechercher',    icon: SearchIcon     },
-    { to: '/login',           label: 'Connexion',     icon: LoginIcon      },
-    { to: '/register',        label: "S'inscrire",    icon: RegisterIcon   },
+    { to: '/',                 label: 'Accueil',      icon: HomeIcon        },
+    { to: '/recherche',        label: 'Rechercher',   icon: SearchIcon      },
+    { to: '/login',            label: 'Connexion',    icon: LoginIcon       },
+    { to: '/register',         label: "S'inscrire",   icon: RegisterIcon    },
   ],
 };
 
@@ -39,24 +42,23 @@ const tabsByRole = {
 
 function BottomNav() {
   const location = useLocation();
-  const user = getUser();
-  const role = user?.role_actuel ?? 'GUEST';
-  const tabs = tabsByRole[role] ?? tabsByRole.GUEST;
+  const user     = getUser();
+  const role     = user?.role_actuel ?? 'GUEST';
+  const tabs     = tabsByRole[role] ?? tabsByRole.GUEST;
 
-  const [badge, setBadge] = useState(0);
-  const [isStandalone, setIsStandalone] = useState(false);
-  const prevPathRef = useRef(location.pathname);
+  const [badge, setBadge]           = useState(0);
+  const [isStandalone, setStandalone] = useState(false);
 
-  /* Détecter mode standalone (PWA installée) */
+  /* Détecter mode PWA standalone */
   useEffect(() => {
     const mq = window.matchMedia('(display-mode: standalone)');
-    setIsStandalone(mq.matches || window.navigator.standalone === true);
-    const handler = (e) => setIsStandalone(e.matches);
+    setStandalone(mq.matches || window.navigator.standalone === true);
+    const handler = (e) => setStandalone(e.matches);
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  /* Badge notifications */
+  /* Badge notifications — rechargé à chaque navigation */
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -64,28 +66,25 @@ function BottomNav() {
       .then(res => { if (!cancelled) setBadge(res.data.non_lues_count ?? 0); })
       .catch(() => {});
     return () => { cancelled = true; };
-  }, [user, location.pathname]); // recharge à chaque navigation
+  }, [user, location.pathname]);
 
-  const isActive = (to) => {
-    if (to === '/') return location.pathname === '/';
-    return location.pathname.startsWith(to);
-  };
+  const isActive = (to) =>
+    to === '/' ? location.pathname === '/' : location.pathname.startsWith(to);
 
   return (
     <>
-      {/* Espaceur pour éviter que le contenu soit caché derrière la nav */}
+      {/* Espaceur pour que le contenu ne soit pas caché derrière la nav */}
       <div
         className="md:hidden"
         style={{ height: isStandalone ? 'calc(4.5rem + env(safe-area-inset-bottom))' : '4.5rem' }}
         aria-hidden="true"
       />
 
-      {/* Barre de navigation */}
       <nav
         className="fixed bottom-0 left-0 right-0 md:hidden z-50"
         style={{
           paddingBottom: isStandalone ? 'env(safe-area-inset-bottom)' : '0',
-          background: 'rgba(255,255,255,0.96)',
+          background: 'rgba(255,255,255,0.97)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           borderTop: '1px solid rgba(0,0,0,0.08)',
@@ -94,21 +93,22 @@ function BottomNav() {
         aria-label="Navigation principale"
       >
         <div
-          className="flex items-stretch justify-around"
+          className="flex items-stretch"
           style={{ height: '4.25rem' }}
         >
           {tabs.map((tab) => {
-            const active = isActive(tab.to);
-            const Icon = tab.icon;
+            const active    = isActive(tab.to);
+            const Icon      = tab.icon;
             const showBadge = tab.badge && badge > 0;
 
+            /* ── Bouton "Publier" mis en valeur ─────────────────────── */
             if (tab.highlight) {
-              /* Bouton "Publier" mis en valeur au centre */
               return (
                 <Link
                   key={tab.to}
                   to={tab.to}
-                  className="flex flex-col items-center justify-center px-2 flex-1 relative group"
+                  className="flex flex-col items-center justify-center flex-1 relative"
+                  style={{ minWidth: 0 }}
                   aria-label={tab.label}
                   aria-current={active ? 'page' : undefined}
                 >
@@ -119,17 +119,14 @@ function BottomNav() {
                       height: '3rem',
                       background: active
                         ? '#111827'
-                        : 'linear-gradient(135deg, #F5A623 0%, #f0940a 100%)',
+                        : 'linear-gradient(135deg,#F5A623 0%,#f0940a 100%)',
                       boxShadow: active
                         ? '0 4px 14px rgba(17,24,39,0.35)'
                         : '0 4px 14px rgba(245,166,35,0.45)',
                       transform: active ? 'scale(0.95)' : 'scale(1)',
                     }}
                   >
-                    <Icon
-                      className="transition-colors"
-                      style={{ color: '#fff', width: 22, height: 22 }}
-                    />
+                    <Icon style={{ color: '#fff', width: 22, height: 22 }} />
                   </span>
                   <span
                     className="text-[10px] font-black mt-0.5 tracking-tight"
@@ -141,23 +138,21 @@ function BottomNav() {
               );
             }
 
+            /* ── Onglet standard ────────────────────────────────────── */
             return (
               <Link
                 key={tab.to}
                 to={tab.to}
-                className="flex flex-col items-center justify-center px-1 flex-1 relative group"
+                className="flex flex-col items-center justify-center flex-1 relative"
+                style={{ minWidth: 0 }}
                 aria-label={tab.label}
                 aria-current={active ? 'page' : undefined}
               >
-                {/* Indicateur actif */}
+                {/* Trait actif en haut */}
                 {active && (
                   <span
                     className="absolute top-0 left-1/2 -translate-x-1/2 rounded-b-full"
-                    style={{
-                      width: '1.75rem',
-                      height: '3px',
-                      background: '#F5A623',
-                    }}
+                    style={{ width: '1.75rem', height: '3px', background: '#F5A623' }}
                     aria-hidden="true"
                   />
                 )}
@@ -167,8 +162,8 @@ function BottomNav() {
                   <Icon
                     className="transition-all duration-200"
                     style={{
-                      width: 24,
-                      height: 24,
+                      width: 22,
+                      height: 22,
                       color: active ? '#111827' : '#9CA3AF',
                       transform: active ? 'scale(1.1)' : 'scale(1)',
                     }}
@@ -177,11 +172,12 @@ function BottomNav() {
                     <span
                       className="absolute -top-1 -right-1.5 flex items-center justify-center rounded-full text-white font-black"
                       style={{
-                        width: badge > 9 ? '1.2rem' : '1rem',
+                        minWidth: badge > 9 ? '1.2rem' : '1rem',
                         height: '1rem',
                         fontSize: '9px',
                         background: '#EF4444',
                         lineHeight: 1,
+                        padding: '0 2px',
                       }}
                     >
                       {badge > 99 ? '99+' : badge}
@@ -191,7 +187,7 @@ function BottomNav() {
 
                 {/* Label */}
                 <span
-                  className="transition-all duration-200 mt-0.5 tracking-tight"
+                  className="transition-all duration-200 mt-0.5 tracking-tight truncate w-full text-center px-0.5"
                   style={{
                     fontSize: '10px',
                     fontWeight: active ? 800 : 500,
@@ -210,7 +206,7 @@ function BottomNav() {
   );
 }
 
-/* ─── Icônes SVG inline ────────────────────────────────────────────────── */
+/* ─── Icônes SVG inline ─────────────────────────────────────────────────── */
 
 function HomeIcon({ className, style }) {
   return (
@@ -221,7 +217,6 @@ function HomeIcon({ className, style }) {
     </svg>
   );
 }
-
 function SearchIcon({ className, style }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -231,7 +226,6 @@ function SearchIcon({ className, style }) {
     </svg>
   );
 }
-
 function TicketIcon({ className, style }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -241,7 +235,6 @@ function TicketIcon({ className, style }) {
     </svg>
   );
 }
-
 function BellIcon({ className, style }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -251,7 +244,6 @@ function BellIcon({ className, style }) {
     </svg>
   );
 }
-
 function UserIcon({ className, style }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -261,7 +253,6 @@ function UserIcon({ className, style }) {
     </svg>
   );
 }
-
 function RouteIcon({ className, style }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -272,7 +263,6 @@ function RouteIcon({ className, style }) {
     </svg>
   );
 }
-
 function PlusIcon({ className, style }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
@@ -281,7 +271,6 @@ function PlusIcon({ className, style }) {
     </svg>
   );
 }
-
 function InboxIcon({ className, style }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -291,7 +280,6 @@ function InboxIcon({ className, style }) {
     </svg>
   );
 }
-
 function WalletIcon({ className, style }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -302,7 +290,6 @@ function WalletIcon({ className, style }) {
     </svg>
   );
 }
-
 function ShieldIcon({ className, style }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -311,7 +298,6 @@ function ShieldIcon({ className, style }) {
     </svg>
   );
 }
-
 function LoginIcon({ className, style }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
@@ -322,7 +308,6 @@ function LoginIcon({ className, style }) {
     </svg>
   );
 }
-
 function RegisterIcon({ className, style }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
