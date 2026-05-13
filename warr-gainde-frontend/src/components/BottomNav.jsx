@@ -31,10 +31,8 @@ const tabsByRole = {
     { to: '/profil',           label: 'Profil',       icon: UserIcon        },
   ],
   GUEST: [
-    { to: '/',                 label: 'Accueil',      icon: HomeIcon        },
     { to: '/recherche',        label: 'Rechercher',   icon: SearchIcon      },
-    { to: '/login',            label: 'Connexion',    icon: LoginIcon       },
-    { to: '/register',         label: "S'inscrire",   icon: RegisterIcon    },
+    { to: '/',                 label: 'Trajets',      icon: RouteIcon       },
   ],
 };
 
