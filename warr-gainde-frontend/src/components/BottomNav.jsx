@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { getUser } from '../utils/auth';
 import api from '../api/axios';
+import { useTheme } from '../context/ThemeContext';
 
 /* ─── Onglets par rôle ─────────────────────────────────────────────────
    CHAUFFEUR : 5 onglets (Publier centré en 3ᵉ position)
@@ -43,6 +44,7 @@ function BottomNav() {
   const user     = getUser();
   const role     = user?.role_actuel ?? 'GUEST';
   const tabs     = tabsByRole[role] ?? tabsByRole.GUEST;
+  const { isDark } = useTheme();
 
   const [badge, setBadge]           = useState(0);
   const [isStandalone, setStandalone] = useState(false);
@@ -79,10 +81,12 @@ function BottomNav() {
       />
 
       <nav
-        className="fixed bottom-0 left-0 right-0 md:hidden z-50"
+        className="bottom-nav-root fixed bottom-0 left-0 right-0 md:hidden z-50"
         style={{
           paddingBottom: isStandalone ? 'env(safe-area-inset-bottom)' : '0',
-          background: 'rgba(255,255,255,0.97)',
+          background: document.documentElement.classList.contains('dark')
+            ? 'rgba(15,23,42,0.97)'
+            : 'rgba(255,255,255,0.97)',
           backdropFilter: 'blur(16px)',
           WebkitBackdropFilter: 'blur(16px)',
           borderTop: '1px solid rgba(0,0,0,0.08)',

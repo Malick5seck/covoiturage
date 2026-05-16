@@ -7,6 +7,7 @@
 body {
     background-color: #F3F4F6;
     color: #111827;
+    transition: background-color 0.25s ease, color 0.25s ease;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     overflow-x: hidden;
@@ -80,4 +81,142 @@ body {
     width: 100%;
     justify-content: center;
   }
+}
+/* ═══════════════════════════════════════════════════════════════════════
+   MODE SOMBRE — overrides globaux
+   Tous les composants utilisent des classes Tailwind standard
+   (bg-white, bg-gray-50, text-gray-700…). On les redéfinit ici
+   sous le sélecteur .dark pour couvrir toutes les pages d'un coup.
+═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── Corps de page ─────────────────────────────────────────────────── */
+.dark body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+/* ─── Surfaces / cartes ─────────────────────────────────────────────── */
+.dark .bg-white        { background-color: #1e293b !important; }
+.dark .bg-gray-50      { background-color: #162032 !important; }
+.dark .bg-gray-100     { background-color: #1e2e46 !important; }
+.dark .bg-gray-200     { background-color: #253352 !important; }
+.dark .bg-gray-300     { background-color: #2d3f61 !important; }
+
+/* ─── Textes ────────────────────────────────────────────────────────── */
+.dark .text-gray-900   { color: #f1f5f9 !important; }
+.dark .text-gray-800   { color: #e2e8f0 !important; }
+.dark .text-gray-700   { color: #cbd5e1 !important; }
+.dark .text-gray-600   { color: #94a3b8 !important; }
+.dark .text-gray-500   { color: #64748b !important; }
+.dark .text-gray-400   { color: #475569 !important; }
+.dark .text-gainde-dark { color: #f1f5f9 !important; }
+.dark .text-black       { color: #f1f5f9 !important; }
+
+/* ─── Bordures ──────────────────────────────────────────────────────── */
+.dark .border-gray-50  { border-color: #1e2e46 !important; }
+.dark .border-gray-100 { border-color: #253352 !important; }
+.dark .border-gray-200 { border-color: #2d3f61 !important; }
+.dark .border-gray-300 { border-color: #3d5278 !important; }
+.dark .divide-gray-100 > * + * { border-color: #253352 !important; }
+.dark .divide-gray-200 > * + * { border-color: #2d3f61 !important; }
+
+/* ─── Hover / focus états ───────────────────────────────────────────── */
+.dark .hover\:bg-gray-50:hover  { background-color: #1e2e46 !important; }
+.dark .hover\:bg-gray-100:hover { background-color: #253352 !important; }
+.dark .hover\:bg-gray-200:hover { background-color: #2d3f61 !important; }
+.dark .focus\:bg-white:focus    { background-color: #253352 !important; }
+.dark .active\:bg-gray-100:active { background-color: #253352 !important; }
+
+/* ─── Inputs, selects, textareas ───────────────────────────────────── */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.dark select,
+.dark textarea {
+  background-color: #1e2e46 !important;
+  border-color: #2d3f61 !important;
+  color: #e2e8f0 !important;
+}
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #475569 !important;
+}
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  background-color: #253352 !important;
+  border-color: #F5A623 !important;
+}
+
+/* ─── Ombres ────────────────────────────────────────────────────────── */
+.dark .shadow,
+.dark .shadow-sm,
+.dark .shadow-md,
+.dark .shadow-lg,
+.dark .shadow-xl,
+.dark .shadow-2xl {
+  --tw-shadow-color: rgba(0,0,0,.45);
+}
+
+/* ─── Navbar ────────────────────────────────────────────────────────── */
+.dark nav.bg-white,
+.dark nav {
+  background-color: #0f172a !important;
+  border-color: #1e2e46 !important;
+}
+
+/* ─── BottomNav ─────────────────────────────────────────────────────── */
+.dark .bottom-nav-root {
+  background-color: #0f172a !important;
+  border-color: #1e2e46 !important;
+}
+
+/* ─── Boutons avec bg-gainde-dark en fond (hero) ─────────────────────
+   Ces sections restent sombres en dark mode — on les éclaircit légèrement */
+.dark .bg-gainde-dark {
+  background-color: #1e293b !important;
+}
+
+/* ─── Badges / pills colorés — on garde leurs couleurs vives ───────── */
+.dark .bg-green-50  { background-color: #052e16 !important; }
+.dark .bg-yellow-50 { background-color: #1c1500 !important; }
+.dark .bg-red-50    { background-color: #1c0505 !important; }
+.dark .bg-blue-50   { background-color: #0c1a30 !important; }
+.dark .bg-purple-50 { background-color: #1a0c30 !important; }
+.dark .bg-orange-50 { background-color: #1c0f00 !important; }
+.dark .bg-indigo-50 { background-color: #0e0f30 !important; }
+
+.dark .text-green-700  { color: #4ade80 !important; }
+.dark .text-green-600  { color: #4ade80 !important; }
+.dark .text-yellow-700 { color: #fde047 !important; }
+.dark .text-yellow-600 { color: #fde047 !important; }
+.dark .text-red-700    { color: #f87171 !important; }
+.dark .text-red-600    { color: #f87171 !important; }
+.dark .text-red-500    { color: #f87171 !important; }
+.dark .text-blue-700   { color: #60a5fa !important; }
+.dark .text-blue-600   { color: #60a5fa !important; }
+.dark .text-purple-700 { color: #c084fc !important; }
+.dark .text-purple-600 { color: #c084fc !important; }
+.dark .text-orange-600 { color: #fb923c !important; }
+.dark .text-indigo-600 { color: #818cf8 !important; }
+
+.dark .border-green-200  { border-color: #166534 !important; }
+.dark .border-yellow-200 { border-color: #a16207 !important; }
+.dark .border-red-200    { border-color: #991b1b !important; }
+.dark .border-blue-200   { border-color: #1e40af !important; }
+
+/* ─── Tableaux ──────────────────────────────────────────────────────── */
+.dark table  { color: #e2e8f0; }
+.dark thead  { background-color: #162032 !important; }
+.dark tbody tr:hover { background-color: #1e2e46 !important; }
+.dark th     { color: #94a3b8 !important; border-color: #253352 !important; }
+.dark td     { border-color: #253352 !important; }
+
+/* ─── Transition douce sur tous les éléments ───────────────────────── */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color;
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
+}
+/* Éviter que les transitions ne perturbent les animations intentionnelles */
+[class*="animate-"], [style*="transition"] {
+  transition: inherit;
 }
